@@ -1,8 +1,17 @@
 {
   "extends": "@react-native/typescript-config",
   "compilerOptions": {
-    "types": ["jest"],
+    "types": [
+      "jest"
+    ]
   },
-  "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["**/node_modules", "**/Pods"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "nativewind-env.d.ts"
+, "App.jsx", "src/navigation/RootStack.jsx", "src/screens/splash/SplashScreen.jsx", "src/store/authSlice.js"  ],
+  "exclude": [
+    "**/node_modules",
+    "**/Pods"
+  ]
 }
