@@ -13,7 +13,7 @@ export const apiSlice = createApi({
       return headers;
     },
   }),
-  tagTypes: ['User', 'PendingUsers', 'Alumni', 'CurrentUser'],
+  tagTypes: ['User', 'PendingUsers', 'Alumni', 'CurrentUser', 'Avatar', 'Events'],
   endpoints: builder => ({
     // --- AUTHENTICATION ---
     loginWithPassword: builder.mutation({
@@ -134,6 +134,88 @@ export const apiSlice = createApi({
       }),
       invalidatesTags: ['CurrentUser', 'Alumni'],
     }),
+
+    // --- AVATAR MANAGEMENT ---
+    getAvatar: builder.query({
+      query: () => '/v1/me/avatar',
+      providesTags: ['Avatar'],
+    }),
+
+    uploadAvatar: builder.mutation({
+      query: formData => ({
+        url: '/v1/me/avatar',
+        method: 'POST',
+        body: formData,
+      }),
+      invalidatesTags: ['Avatar', 'CurrentUser'],
+    }),
+
+    updateAvatar: builder.mutation({
+      query: formData => ({
+        url: '/v1/me/avatar',
+        method: 'PUT',
+        body: formData,
+      }),
+      invalidatesTags: ['Avatar', 'CurrentUser'],
+    }),
+
+    deleteAvatar: builder.mutation({
+      query: () => ({
+        url: '/v1/me/avatar',
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Avatar', 'CurrentUser'],
+    }),
+
+    // --- EVENTS MANAGEMENT ---
+    getEvents: builder.query({
+      query: params => ({
+        url: '/v1/events',
+        method: 'GET',
+        params: params,
+      }),
+      providesTags: ['Events'],
+    }),
+
+    getEventById: builder.query({
+      query: eventId => `/v1/events/${eventId}`,
+      providesTags: ['Events'],
+    }),
+
+    createEvent: builder.mutation({
+      query: eventData => ({
+        url: '/v1/events',
+        method: 'POST',
+        body: eventData,
+      }),
+      invalidatesTags: ['Events'],
+    }),
+
+    updateEvent: builder.mutation({
+      query: ({ eventId, ...eventData }) => ({
+        url: `/v1/events/${eventId}`,
+        method: 'PUT',
+        body: eventData,
+      }),
+      invalidatesTags: ['Events'],
+    }),
+
+    deleteEvent: builder.mutation({
+      query: eventId => ({
+        url: `/v1/events/${eventId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Events'],
+    }),
+
+    uploadEventBanner: builder.mutation({
+      query: ({ eventId, formData }) => ({
+        url: `/v1/events/${eventId}/banner`,
+        method: 'POST',
+        body: formData,
+      }),
+      invalidatesTags: ['Events'],
+    }),
   }),
 });
 
@@ -153,4 +235,14 @@ export const {
   useGetPendingUsersQuery,
   useGetAlumniUsersQuery,
   useGetAlumniStatsQuery,
+  useGetAvatarQuery,
+  useUploadAvatarMutation,
+  useUpdateAvatarMutation,
+  useDeleteAvatarMutation,
+  useGetEventsQuery,
+  useGetEventByIdQuery,
+  useCreateEventMutation,
+  useUpdateEventMutation,
+  useDeleteEventMutation,
+  useUploadEventBannerMutation,
 } = apiSlice;

@@ -26,10 +26,11 @@ import {
   MapPin,
 } from 'lucide-react-native';
 
-// Import the API hook
+// Import the API hooks
 import {
   useGetCurrentUserQuery,
   useGetAlumniStatsQuery,
+  useGetEventsQuery,
 } from '../../api/apiSlice';
 
 export default function HomeScreen({ navigation }) {
@@ -37,13 +38,11 @@ export default function HomeScreen({ navigation }) {
 
   // Fetch Current User Data
   const { data: user, isFetching, refetch } = useGetCurrentUserQuery();
- const {
-   data: stats = { total_count: 0, approved_count: 0, pending_count: 0 },
-   refetch: refetchStats,
- } = useGetAlumniStatsQuery();
-  
-  console.log(stats);
-
+  const {
+    data: stats = { total_count: 0, approved_count: 0, pending_count: 0 },
+    refetch: refetchStats,
+  } = useGetAlumniStatsQuery();
+  const { data: events = [], isFetching: isEventsFetching } = useGetEventsQuery();
 
   // Safely extract user details with fallbacks
   const fullName = user
@@ -156,7 +155,10 @@ export default function HomeScreen({ navigation }) {
               </View>
             </View>
 
-            <View className="flex-1 bg-white rounded-xl p-4 shadow-sm flex-row items-center gap-3">
+            <Pressable
+              onPress={() => nav('Events')}
+              className="flex-1 bg-white rounded-xl p-4 shadow-sm flex-row items-center gap-3"
+            >
               <View className="w-10 h-10 bg-purple-50 rounded-full items-center justify-center">
                 <Calendar size={20} color="#7C3AED" />
               </View>
@@ -164,9 +166,11 @@ export default function HomeScreen({ navigation }) {
                 <Text className="text-xs text-gray-500 font-medium">
                   Upcoming Events
                 </Text>
-                <Text className="text-lg font-bold text-[#1C1C1C]">08</Text>
+                <Text className="text-lg font-bold text-[#1C1C1C]">
+                  {events?.length || '0'}
+                </Text>
               </View>
-            </View>
+            </Pressable>
           </View>
 
           {/* 2. ALUMNI MEET CARD */}
@@ -252,6 +256,13 @@ export default function HomeScreen({ navigation }) {
                   bg: 'bg-blue-50',
                 },
                 {
+                  title: 'Events',
+                  icon: Calendar,
+                  color: '#7C3AED',
+                  route: 'Events',
+                  bg: 'bg-purple-50',
+                },
+                {
                   title: 'Donate',
                   icon: Heart,
                   color: '#EF4444',
@@ -264,13 +275,6 @@ export default function HomeScreen({ navigation }) {
                   color: '#F59E0B',
                   route: 'Volunteering',
                   bg: 'bg-amber-50',
-                },
-                {
-                  title: 'Community',
-                  icon: Users,
-                  color: '#10B981',
-                  route: 'Community',
-                  bg: 'bg-emerald-50',
                 },
               ].map((item, idx) => (
                 <Pressable

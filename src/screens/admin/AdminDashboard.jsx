@@ -34,6 +34,7 @@ import {
   useGetAlumniStatsQuery,
   useApproveUserMutation,
 } from '../../api/apiSlice';
+import AdminEventsTab from './AdminEventsTab';
 
 export default function AdminDashboard({ navigation }) {
   const [tab, setTab] = useState('overview');
@@ -71,11 +72,11 @@ export default function AdminDashboard({ navigation }) {
       });
     } catch (error) {
       console.error('Approval failed:', error);
-Toast.show({
-  type: 'error',
-  text1: 'Approval Failed',
-  text2: 'Failed to approve user. Please try again.',
-});
+      Toast.show({
+        type: 'error',
+        text1: 'Approval Failed',
+        text2: 'Failed to approve user. Please try again.',
+      });
     }
   };
 
@@ -207,7 +208,7 @@ Toast.show({
 
       {/* Tabs */}
       <View className="flex-row bg-white border-b border-gray-200">
-        {['overview', 'approvals', 'alumni'].map(t => (
+        {['overview', 'approvals', 'alumni', 'events'].map(t => (
           <TouchableOpacity
             key={t}
             onPress={() => setTab(t)}
@@ -395,6 +396,9 @@ Toast.show({
             <View className="h-10" />
           </>
         )}
+
+        {/* EVENTS TAB */}
+        {tab === 'events' && <AdminEventsTab />}
       </ScrollView>
     </View>
   );
