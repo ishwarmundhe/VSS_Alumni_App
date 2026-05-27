@@ -20,14 +20,11 @@ import {
   Home,
 } from 'lucide-react-native';
 
-// Import the RTK Query hook
 import { useGetUserDetailsQuery } from '../../api/apiSlice';
 
 export default function UserProfile({ navigation, route }) {
-  // Extract userId passed from AdminDashboard
   const { userId } = route.params;
 
-  // Fetch detailed user data
   const { data: user, isLoading, isError } = useGetUserDetailsQuery(userId);
 
   if (isLoading) {

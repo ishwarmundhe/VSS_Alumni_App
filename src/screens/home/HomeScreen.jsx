@@ -42,7 +42,8 @@ export default function HomeScreen({ navigation }) {
     data: stats = { total_count: 0, approved_count: 0, pending_count: 0 },
     refetch: refetchStats,
   } = useGetAlumniStatsQuery();
-  const { data: events = [], isFetching: isEventsFetching } = useGetEventsQuery();
+  const { data: events = [], isFetching: isEventsFetching } =
+    useGetEventsQuery();
 
   // Safely extract user details with fallbacks
   const fullName = user
@@ -52,7 +53,7 @@ export default function HomeScreen({ navigation }) {
   const batchString =
     user?.from_year && user?.to_year
       ? `Batch ${user.from_year}-${user.to_year}`
-      : 'Batch Pending';
+      : 'Null';
 
   const primaryAddress =
     user?.addresses && user?.addresses.length > 0 ? user.addresses[0] : null;
@@ -205,7 +206,8 @@ export default function HomeScreen({ navigation }) {
           </Pressable>
 
           {/* 3. SAMITI UPDATES */}
-          <View>
+
+          {/* <View>
             <View className="flex-row items-center justify-between mb-3">
               <Text className="text-[#1C1C1C] text-lg font-bold">
                 Latest Updates
@@ -239,7 +241,7 @@ export default function HomeScreen({ navigation }) {
                 </Text>
               </View>
             </Pressable>
-          </View>
+          </View> */}
 
           {/* 4. QUICK ACTIONS */}
           <View>
@@ -295,8 +297,7 @@ export default function HomeScreen({ navigation }) {
             </View>
           </View>
 
-          {/* 5. NEW: SPOTLIGHT SECTION */}
-          <View>
+          {/* <View>
             <Text className="text-[#1C1C1C] text-lg font-bold mb-3">
               Alumni Spotlight
             </Text>
@@ -333,8 +334,6 @@ export default function HomeScreen({ navigation }) {
               </View>
             </View>
           </View>
-
-          {/* 6. NEW: RECENT JOBS */}
           <View>
             <View className="flex-row items-center justify-between mb-3">
               <Text className="text-[#1C1C1C] text-lg font-bold">
@@ -372,7 +371,7 @@ export default function HomeScreen({ navigation }) {
                 </View>
               ))}
             </View>
-          </View>
+          </View> */}
         </View>
       </ScrollView>
     </View>

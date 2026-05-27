@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   FlatList,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -165,13 +166,12 @@ export default function EventsScreen({ navigation }) {
       <View className="px-4 py-3 border-b border-gray-100">
         <View className="flex-row items-center bg-gray-100 rounded-lg px-3">
           <Search size={18} color="#999" />
-          <input
-            type="text"
+          <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Search events..."
-            className="flex-1 ml-2 py-2 bg-gray-100 text-gray-900 outline-none"
-            style={{ fontFamily: 'sans-serif' }}
+            placeholderTextColor="#999"
+            className="flex-1 ml-2 py-2 text-gray-900"
           />
         </View>
       </View>

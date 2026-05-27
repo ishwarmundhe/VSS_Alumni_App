@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,10 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Alert,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage'; // Make sure to import this!
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   useSendOtpMutation,
   useLoginWithPasswordMutation,
@@ -22,25 +22,52 @@ import Toast from 'react-native-toast-message';
 
 export default function LoginScreen({ onSendOTP, onRegister }) {
   const [mobile, setMobile] = useState('');
-  const [adminMobile, setAdminMobile] = useState('');
+  const [adminUsername, setAdminUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showEmailLogin, setShowEmailLogin] = useState(false);
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+
+  // <-- Added state for Password Visibility Toggle -->
+  const [showPassword, setShowPassword] = useState(false);
+
   const dispatch = useDispatch();
 
   const [sendOtp, { isLoading: isSendingOtp }] = useSendOtpMutation();
   const [loginWithPassword, { isLoading: isLoggingIn }] =
     useLoginWithPasswordMutation();
 
+  useEffect(() => {
+    const keyboardShowEvent =
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const keyboardHideEvent =
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const keyboardDidShowListener = Keyboard.addListener(
+      keyboardShowEvent,
+      () => setKeyboardVisible(true),
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      keyboardHideEvent,
+      () => setKeyboardVisible(false),
+    );
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, []);
+
   const handleSendOTP = async () => {
     if (mobile.length !== 10) return;
-    console.log('==>');
+    Keyboard.dismiss();
 
     try {
       const res = await sendOtp({
         country_code: '+91',
         mobile: mobile,
       }).unwrap();
-      console.log('res', res);
+
+      console.log('OTP sent successfully:', res);
 
       if (onSendOTP) {
         onSendOTP(mobile);
@@ -56,27 +83,25 @@ export default function LoginScreen({ onSendOTP, onRegister }) {
   };
 
   const handleAdminLogin = async () => {
-    if (adminMobile.length < 10 || !password) {
+    if (!adminUsername.trim() || !password) {
       Toast.show({
         type: 'error',
         text1: 'Missing Fields',
-        text2: 'Please enter a valid mobile number and password.',
+        text2: 'Please enter a valid identifier and password.',
       });
       return;
     }
 
+    Keyboard.dismiss();
+
     try {
       const result = await loginWithPassword({
-        username: adminMobile,
+        username: adminUsername.trim(),
         password,
       }).unwrap();
 
-      console.log('Login Response: ', result);
-
-      // 1. Dispatch the FULL result object to Redux
       dispatch(setLoginSuccess(result));
 
-      // 2. Determine boolean states based on the response to save to AsyncStorage
       const userRoles = result.roles || [];
       const isComplete =
         userRoles.includes('ADMIN') ||
@@ -85,7 +110,6 @@ export default function LoginScreen({ onSendOTP, onRegister }) {
       const isApproved =
         userRoles.includes('ADMIN') || userRoles.includes('ALUMNI');
 
-      // 3. Save as a JSON string so RootStack can read it on reload
       const authData = {
         token: result.access_token,
         role: userRoles.includes('ADMIN') ? 'ADMIN' : 'ALUMNI',
@@ -113,37 +137,39 @@ export default function LoginScreen({ onSendOTP, onRegister }) {
           className="flex-1 px-6 py-8"
           contentContainerStyle={{ flexGrow: 1 }}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          {/* Logo */}
-          <View className="items-center mb-8">
-            <Image
-              source={require('../../assets/images/vsslogo.jpg')}
-              resizeMode="contain"
-              style={{ width: 128, height: 128 }}
-            />
-          </View>
+          {!isKeyboardVisible && (
+            <>
+              <View className="items-center mb-8">
+                <Image
+                  source={require('../../assets/images/vsslogo.jpg')}
+                  resizeMode="contain"
+                  style={{ width: 128, height: 128 }}
+                />
+              </View>
 
-          {/* Text content */}
-          <View className="mb-8">
-            <Text className="text-center text-xl text-[#1C1C1C] mb-1">
-              माजी विद्यार्थी मंडळ
-            </Text>
-            <Text className="text-center text-lg text-[#2E4A8A] font-semibold mb-2">
-              VSS Alumni Connect
-            </Text>
-            <Text className="text-center text-[#1C1C1C] opacity-70 px-4">
-              आमची समिती आपल्या आयुष्यभर साथ देते. पुन्हा जुडा, वाढा, आणि पुढे
-              आणा.
-            </Text>
-            <Text className="text-center text-sm text-[#1C1C1C] opacity-60 px-4 mt-2">
-              Our Samiti is a lifelong support system. Reconnect, grow, and give
-              forward.
-            </Text>
-          </View>
+              <View className="mb-8">
+                <Text className="text-center text-xl text-[#1C1C1C] mb-1">
+                  माजी विद्यार्थी मंडळ
+                </Text>
+                <Text className="text-center text-lg text-[#2E4A8A] font-semibold mb-2">
+                  VSS Alumni Connect
+                </Text>
+                <Text className="text-center text-[#1C1C1C] opacity-70 px-4">
+                  आमची समिती आपल्या आयुष्यभर साथ देते. पुन्हा जुडा, वाढा, आणि
+                  पुढे आणा.
+                </Text>
+                <Text className="text-center text-sm text-[#1C1C1C] opacity-60 px-4 mt-2">
+                  Our Samiti is a lifelong support system. Reconnect, grow, and
+                  give forward.
+                </Text>
+              </View>
+            </>
+          )}
 
           {!showEmailLogin ? (
-            <View className="gap-6 flex-1">
-              {/* Mobile Login - Primary */}
+            <View className={`gap-6 flex-1 ${isKeyboardVisible ? 'mt-4' : ''}`}>
               <View className="gap-4">
                 <View className="gap-2">
                   <Text className="text-[#1C1C1C] font-medium">
@@ -165,23 +191,21 @@ export default function LoginScreen({ onSendOTP, onRegister }) {
 
                 <TouchableOpacity
                   onPress={handleSendOTP}
-                  disabled={mobile.length !== 10}
+                  disabled={mobile.length !== 10 || isSendingOtp}
                   className={`rounded-lg py-3 ${mobile.length === 10 ? 'bg-[#2E4A8A]' : 'bg-gray-300'}`}
                 >
                   <Text className="text-white text-center font-semibold">
-                    Send OTP
+                    {isSendingOtp ? 'Sending...' : 'Send OTP'}
                   </Text>
                 </TouchableOpacity>
               </View>
 
-              {/* Divider */}
               <View className="flex-row items-center my-4">
                 <View className="flex-1 h-px bg-gray-300" />
                 <Text className="mx-3 text-xs text-gray-500 uppercase">Or</Text>
                 <View className="flex-1 h-px bg-gray-300" />
               </View>
 
-              {/* Email Login Button */}
               <TouchableOpacity
                 onPress={() => setShowEmailLogin(true)}
                 className="border border-[#2E4A8A] rounded-lg py-3"
@@ -190,74 +214,73 @@ export default function LoginScreen({ onSendOTP, onRegister }) {
                   Login as Administrator
                 </Text>
               </TouchableOpacity>
-
-              {/* Register */}
-              {/* <View className="mt-auto pt-6 pb-4">
-                <Text className="text-center text-sm text-[#717182] mb-3">
-                  Not registered yet?
-                </Text>
-                <TouchableOpacity
-                  onPress={onRegister}
-                  className="border border-[#1F8F3A] rounded-lg py-3"
-                >
-                  <Text className="text-[#1F8F3A] text-center font-medium">
-                    Register as New Alumni
-                  </Text>
-                </TouchableOpacity>
-              </View> */}
             </View>
           ) : (
-            <View className="gap-6 flex-1">
-              {/* Admin Login Form */}
+            <View className={`gap-6 flex-1 ${isKeyboardVisible ? 'mt-4' : ''}`}>
               <View className="gap-4">
                 <View className="gap-2">
                   <Text className="text-[#1C1C1C] font-medium">
-                    Mobile Number *
+                    Username, Email or Mobile *
                   </Text>
                   <TextInput
                     placeholderTextColor="#9CA3AF"
-                    placeholder="Enter registered mobile number"
-                    keyboardType="phone-pad"
-                    maxLength={10}
-                    value={adminMobile}
-                    onChangeText={text =>
-                      setAdminMobile(text.replace(/\D/g, ''))
-                    }
+                    placeholder="Enter username, email or mobile"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    value={adminUsername}
+                    onChangeText={setAdminUsername}
                     className="bg-[#F2F4F7] rounded-lg px-4 py-3 text-[#1C1C1C]"
                   />
                 </View>
 
+                {/* <-- Updated Password Field --> */}
                 <View className="gap-2">
                   <Text className="text-[#1C1C1C] font-medium">Password *</Text>
-                  <TextInput
-                    placeholderTextColor="#9CA3AF"
-                    placeholder="Enter your password"
-                    secureTextEntry
-                    value={password}
-                    onChangeText={setPassword}
-                    className="bg-[#F2F4F7] rounded-lg px-4 py-3 text-[#1C1C1C]"
-                  />
+                  <View className="relative justify-center">
+                    <TextInput
+                      placeholderTextColor="#9CA3AF"
+                      placeholder="Enter your password"
+                      secureTextEntry={!showPassword}
+                      value={password}
+                      onChangeText={setPassword}
+                      // Added pr-16 to make room for the toggle button so text doesn't hide behind it
+                      className="bg-[#F2F4F7] rounded-lg pl-4 pr-16 py-3 text-[#1C1C1C] w-full"
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 h-full justify-center"
+                    >
+                      <Text className="text-[#2E4A8A] font-medium text-sm">
+                        {showPassword ? 'Hide' : 'Show'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
-                {/* Login Button: Disabled until both fields are filled */}
                 <TouchableOpacity
                   onPress={handleAdminLogin}
-                  disabled={adminMobile.length !== 10 || password.length === 0}
+                  disabled={
+                    adminUsername.trim().length === 0 ||
+                    password.length === 0 ||
+                    isLoggingIn
+                  }
                   className={`rounded-lg py-3 ${
-                    adminMobile.length === 10 && password.length > 0
+                    adminUsername.trim().length > 0 && password.length > 0
                       ? 'bg-[#2E4A8A]'
                       : 'bg-gray-300'
                   }`}
                 >
                   <Text className="text-white text-center font-semibold">
-                    Login
+                    {isLoggingIn ? 'Logging in...' : 'Login'}
                   </Text>
                 </TouchableOpacity>
               </View>
 
-              {/* Back Button */}
               <TouchableOpacity
-                onPress={() => setShowEmailLogin(false)}
+                onPress={() => {
+                  setShowEmailLogin(false);
+                  Keyboard.dismiss();
+                }}
                 className="py-3 mt-auto"
               >
                 <Text className="text-center text-[#2E4A8A]">

@@ -6,16 +6,12 @@ import {
   TouchableOpacity,
   StatusBar,
   Image,
-  ActivityIndicator,
-  Alert,
   RefreshControl,
 } from 'react-native';
 import {
   ArrowLeft,
   CheckCircle,
-  XCircle,
   Users,
-  Wallet,
   Calendar,
   AlertCircle,
   Clock,
@@ -27,12 +23,14 @@ import {
   FileText,
   InfoIcon,
 } from 'lucide-react-native';
+import Toast from 'react-native-toast-message';
 
 import {
   useGetPendingUsersQuery,
   useGetAlumniUsersQuery,
   useGetAlumniStatsQuery,
   useApproveUserMutation,
+  useGetEventsQuery,
 } from '../../api/apiSlice';
 import AdminEventsTab from './AdminEventsTab';
 
@@ -54,12 +52,19 @@ export default function AdminDashboard({ navigation }) {
     data: stats = { total_count: 0, approved_count: 0, pending_count: 0 },
     refetch: refetchStats,
   } = useGetAlumniStatsQuery();
+  const {
+    data: events = [],
+    isFetching: isFetchingEvents,
+    refetch: refetchEvents,
+  } = useGetEventsQuery();
+
   const [approveUser, { isLoading: isApproving }] = useApproveUserMutation();
 
   const handleRefresh = () => {
     refetchPending();
     refetchApproved();
     refetchStats();
+    refetchEvents();
   };
 
   const handleApprove = async (userId, userName) => {
@@ -83,40 +88,6 @@ export default function AdminDashboard({ navigation }) {
   const navToProfile = userId => {
     navigation.navigate('UserProfile', { userId });
   };
-
-  // --- STATIC MOCK DATA FOR OVERVIEW ---
-  const recentActivities = [
-    {
-      id: 1,
-      text: 'Rahul P. submitted registration',
-      time: '10 mins ago',
-      icon: UserPlus,
-      color: '#2563EB',
-      bg: 'bg-blue-100',
-    },
-    {
-      id: 2,
-      text: 'Sneha G. donated ₹5,000 to Hostel Fund',
-      time: '2 hours ago',
-      icon: Heart,
-      color: '#EA580C',
-      bg: 'bg-orange-100',
-    },
-    {
-      id: 3,
-      text: 'Amit D. posted a new job opportunity',
-      time: '5 hours ago',
-      icon: FileText,
-      color: '#16A34A',
-      bg: 'bg-green-100',
-    },
-  ];
-
-  const recentDonations = [
-    { id: 1, name: 'Vikram Singh', batch: '2015', amount: '₹10,000' },
-    { id: 2, name: 'Anjali Nair', batch: '2018', amount: '₹2,500' },
-    { id: 3, name: 'Priya Sharma', batch: '2012', amount: '₹5,000' },
-  ];
 
   // --- REUSABLE COMPONENTS ---
   const StatCard = ({ icon: Icon, color, bg, label, value }) => (
@@ -194,6 +165,41 @@ export default function AdminDashboard({ navigation }) {
     </TouchableOpacity>
   );
 
+  const EventCard = ({ event }) => (
+    <TouchableOpacity
+      onPress={() => navigation.navigate('EventDetails', { eventId: event.id })}
+      className="bg-white p-4 rounded-xl mb-3 shadow-sm border border-gray-100"
+    >
+      <View className="flex-row justify-between items-start mb-2">
+        <Text className="text-base font-bold text-[#1C1C1C] flex-1 mr-2">
+          {event.event_name}
+        </Text>
+        {event.is_paid ? (
+          <Text className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-1 rounded-full">
+            ₹{event.registration_fee}
+          </Text>
+        ) : (
+          <Text className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+            Free
+          </Text>
+        )}
+      </View>
+      <Text className="text-xs text-gray-500 mb-2">
+        Hosted by {event.host_name}
+      </Text>
+      <View className="flex-row gap-4 border-t border-gray-50 pt-2">
+        <View className="flex-row items-center gap-1">
+          <Calendar size={12} color="#6B7280" />
+          <Text className="text-xs text-gray-500">{event.date}</Text>
+        </View>
+        <View className="flex-row items-center gap-1">
+          <Clock size={12} color="#6B7280" />
+          <Text className="text-xs text-gray-500">{event.time}</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: '#F8F9FA' }}>
       <StatusBar barStyle="light-content" backgroundColor="#2E4A8A" />
@@ -208,7 +214,7 @@ export default function AdminDashboard({ navigation }) {
 
       {/* Tabs */}
       <View className="flex-row bg-white border-b border-gray-200">
-        {['overview', 'approvals', 'alumni', 'events'].map(t => (
+        {['overview', 'approvals', 'events'].map(t => (
           <TouchableOpacity
             key={t}
             onPress={() => setTab(t)}
@@ -230,7 +236,9 @@ export default function AdminDashboard({ navigation }) {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={isFetchingPending || isFetchingApproved}
+            refreshing={
+              isFetchingPending || isFetchingApproved || isFetchingEvents
+            }
             onRefresh={handleRefresh}
           />
         }
@@ -255,18 +263,11 @@ export default function AdminDashboard({ navigation }) {
                 value={stats.pending_count}
               />
               <StatCard
-                icon={Wallet}
-                color="#16A34A"
-                bg="bg-green-100"
-                label="Total Funds"
-                value="₹ 4.5L"
-              />
-              <StatCard
                 icon={Calendar}
                 color="#9333EA"
                 bg="bg-purple-100"
-                label="Active Events"
-                value="3"
+                label="Total Events"
+                value={events.length}
               />
             </View>
 
@@ -291,7 +292,10 @@ export default function AdminDashboard({ navigation }) {
                   Export CSV
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity className="bg-white p-4 rounded-xl items-center flex-1 ml-2 shadow-sm border border-gray-100">
+              <TouchableOpacity
+                onPress={() => setTab('events')}
+                className="bg-white p-4 rounded-xl items-center flex-1 ml-2 shadow-sm border border-gray-100"
+              >
                 <View className="bg-purple-50 w-10 h-10 rounded-full items-center justify-center mb-2">
                   <Calendar size={20} color="#9333EA" />
                 </View>
@@ -301,67 +305,40 @@ export default function AdminDashboard({ navigation }) {
               </TouchableOpacity>
             </View>
 
-            {/* Recent Activity */}
-            <Text className="font-bold text-[#1C1C1C] text-lg mb-3">
-              Recent Activity
-            </Text>
-            <View className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 mb-6">
-              {recentActivities.map((activity, index) => (
-                <View
-                  key={activity.id}
-                  className={`flex-row items-center gap-3 py-3 ${index !== recentActivities.length - 1 ? 'border-b border-gray-50' : ''}`}
-                >
-                  <View
-                    className={`${activity.bg} w-8 h-8 rounded-full items-center justify-center`}
-                  >
-                    <activity.icon size={14} color={activity.color} />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-sm text-[#1C1C1C] font-medium">
-                      {activity.text}
-                    </Text>
-                    <View className="flex-row items-center mt-1">
-                      <Clock size={10} color="#9CA3AF" />
-                      <Text className="text-[10px] text-gray-400 ml-1">
-                        {activity.time}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              ))}
-            </View>
-
-            {/* Recent Donations */}
+            {/* Upcoming Events */}
             <View className="flex-row justify-between items-center mb-3">
               <Text className="font-bold text-[#1C1C1C] text-lg">
-                Recent Donations
+                Upcoming Events
               </Text>
-              <TouchableOpacity>
+              <TouchableOpacity onPress={() => setTab('events')}>
                 <Text className="text-sm text-[#2E4A8A] font-semibold">
-                  View All
+                  Manage
                 </Text>
               </TouchableOpacity>
             </View>
-            <View className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-              {recentDonations.map((donation, index) => (
-                <View
-                  key={donation.id}
-                  className={`flex-row justify-between items-center py-3 ${index !== recentDonations.length - 1 ? 'border-b border-gray-50' : ''}`}
-                >
-                  <View>
-                    <Text className="text-sm font-bold text-[#1C1C1C]">
-                      {donation.name}
-                    </Text>
-                    <Text className="text-xs text-gray-500">
-                      Batch {donation.batch}
-                    </Text>
-                  </View>
-                  <Text className="text-sm font-bold text-[#16A34A]">
-                    {donation.amount}
-                  </Text>
-                </View>
-              ))}
-            </View>
+
+            {isFetchingEvents ? (
+              <Text className="text-gray-400 text-sm text-center py-4">
+                Loading events...
+              </Text>
+            ) : events.length === 0 ? (
+              <View className="bg-white rounded-xl p-6 items-center border border-gray-100">
+                <Calendar size={32} color="#ccc" />
+                <Text className="text-gray-400 text-sm mt-2">
+                  No events created yet
+                </Text>
+              </View>
+            ) : (
+              events
+                .slice()
+                .sort(
+                  (a, b) =>
+                    new Date(`${a.date}T${a.time}`) -
+                    new Date(`${b.date}T${b.time}`),
+                )
+                .slice(0, 3)
+                .map(event => <EventCard key={event.id} event={event} />)
+            )}
           </View>
         )}
 
@@ -375,22 +352,6 @@ export default function AdminDashboard({ navigation }) {
             ) : (
               pendingUsers.map(user => (
                 <UserListItem key={user.id} user={user} isPending={true} />
-              ))
-            )}
-            <View className="h-10" />
-          </>
-        )}
-
-        {/* ALUMNI TAB */}
-        {tab === 'alumni' && (
-          <>
-            {approvedUsers.length === 0 ? (
-              <Text className="text-center text-gray-500 mt-10">
-                No approved alumni found.
-              </Text>
-            ) : (
-              approvedUsers.map(user => (
-                <UserListItem key={user.id} user={user} isPending={false} />
               ))
             )}
             <View className="h-10" />

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'; 
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useDispatch, useSelector } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import EditProfileScreen from '../screens/user/EditProfileScreen';
@@ -33,6 +33,8 @@ import VolunteeringScreen from '../screens/volunteering/VolunteeringScreen';
 import UpdatesScreen from '../screens/updates/UpdatesScreen';
 import AdminDashboard from '../screens/admin/AdminDashboard';
 import SettingsScreen from '../screens/user/SettingScreen';
+import EventsScreen from '../screens/events/EventsScreen';
+import EventDetailsScreen from '../screens/events/EventDetailsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -41,9 +43,7 @@ function MainTabs() {
   const role = useSelector(selectUserRole);
   const insets = useSafeAreaInsets();
 
-
   const bottomPadding = Platform.OS === 'ios' ? insets.bottom : 10;
-
 
   const tabBarHeight = Platform.OS === 'ios' ? 50 + bottomPadding : 60;
 
@@ -179,6 +179,9 @@ export default function RootStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="MainTabs" component={MainTabs} />
+      <Stack.Screen name="Events" component={EventsScreen} />
+      <Stack.Screen name="EventDetails" component={EventDetailsScreen} />
+
       <Stack.Screen name="UserProfile" component={UserProfile} />
       <Stack.Screen name="Fundraising" component={FundraisingScreen} />
       <Stack.Screen name="Volunteering" component={VolunteeringScreen} />

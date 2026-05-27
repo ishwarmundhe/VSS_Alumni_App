@@ -22,6 +22,7 @@ import {
   Users,
 } from 'lucide-react-native';
 import Toast from 'react-native-toast-message';
+import DateTimePickerModal from 'react-native-modal-datetime-picker'; // <-- Added import
 
 import {
   useGetEventsQuery,
@@ -33,6 +34,11 @@ import {
 export default function AdminEventsTab() {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
+
+  // Date and Time Picker States
+  const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
+  const [isTimePickerVisible, setTimePickerVisibility] = useState(false);
+
   const [formData, setFormData] = useState({
     event_name: '',
     date: '',
@@ -80,6 +86,33 @@ export default function AdminEventsTab() {
     setEditingEvent(null);
   };
 
+  // --- Picker Handlers ---
+  const showDatePicker = () => setDatePickerVisibility(true);
+  const hideDatePicker = () => setDatePickerVisibility(false);
+
+  const handleConfirmDate = selectedDate => {
+    // Format to local YYYY-MM-DD to avoid UTC timezone shifts
+    const year = selectedDate.getFullYear();
+    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const day = String(selectedDate.getDate()).padStart(2, '0');
+
+    setFormData({ ...formData, date: `${year}-${month}-${day}` });
+    hideDatePicker();
+  };
+
+  const showTimePicker = () => setTimePickerVisibility(true);
+  const hideTimePicker = () => setTimePickerVisibility(false);
+
+  const handleConfirmTime = selectedTime => {
+    // Format to HH:MM
+    const hours = String(selectedTime.getHours()).padStart(2, '0');
+    const minutes = String(selectedTime.getMinutes()).padStart(2, '0');
+
+    setFormData({ ...formData, time: `${hours}:${minutes}` });
+    hideTimePicker();
+  };
+  // -----------------------
+
   const validateForm = () => {
     if (!formData.event_name.trim()) {
       Toast.show({
@@ -93,7 +126,7 @@ export default function AdminEventsTab() {
       Toast.show({
         type: 'error',
         text1: 'Validation Error',
-        text2: 'Event date is required (YYYY-MM-DD)',
+        text2: 'Event date is required',
       });
       return false;
     }
@@ -101,7 +134,7 @@ export default function AdminEventsTab() {
       Toast.show({
         type: 'error',
         text1: 'Validation Error',
-        text2: 'Event time is required (HH:MM)',
+        text2: 'Event time is required',
       });
       return false;
     }
@@ -125,7 +158,7 @@ export default function AdminEventsTab() {
       Toast.show({
         type: 'error',
         text1: 'Validation Error',
-        text2: 'Registration fee must be greater than 0 for paid events',
+        text2: 'Registration fee must be greater than 0',
       });
       return false;
     }
@@ -148,11 +181,10 @@ export default function AdminEventsTab() {
         }),
       };
 
+      console.log('Submitting Event:', payload);
+
       if (editingEvent) {
-        await updateEvent({
-          eventId: editingEvent.id,
-          ...payload,
-        }).unwrap();
+        await updateEvent({ eventId: editingEvent.id, ...payload }).unwrap();
         Toast.show({
           type: 'success',
           text1: 'Success',
@@ -169,6 +201,7 @@ export default function AdminEventsTab() {
       handleCloseModal();
       refetch();
     } catch (error) {
+      console.log('Error submitting event:', error);
       Toast.show({
         type: 'error',
         text1: 'Error',
@@ -357,36 +390,46 @@ export default function AdminEventsTab() {
                 />
               </View>
 
-              {/* Date */}
+              {/* Date Picker Button */}
               <View className="mb-4">
                 <Text className="text-sm font-semibold text-gray-700 mb-2">
-                  Date (YYYY-MM-DD) *
+                  Date *
                 </Text>
-                <TextInput
-                  value={formData.date}
-                  onChangeText={text =>
-                    setFormData({ ...formData, date: text })
-                  }
-                  placeholder="2026-06-15"
-                  className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 text-gray-900"
-                  editable={!isCreating && !isUpdating}
-                />
+                <TouchableOpacity
+                  onPress={showDatePicker}
+                  disabled={isCreating || isUpdating}
+                  className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 flex-row justify-between items-center"
+                >
+                  <Text
+                    className={
+                      formData.date ? 'text-gray-900' : 'text-gray-400'
+                    }
+                  >
+                    {formData.date || 'Select Date'}
+                  </Text>
+                  <CalendarIcon size={18} color="#666" />
+                </TouchableOpacity>
               </View>
 
-              {/* Time */}
+              {/* Time Picker Button */}
               <View className="mb-4">
                 <Text className="text-sm font-semibold text-gray-700 mb-2">
-                  Time (HH:MM) *
+                  Time *
                 </Text>
-                <TextInput
-                  value={formData.time}
-                  onChangeText={text =>
-                    setFormData({ ...formData, time: text })
-                  }
-                  placeholder="18:00"
-                  className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 text-gray-900"
-                  editable={!isCreating && !isUpdating}
-                />
+                <TouchableOpacity
+                  onPress={showTimePicker}
+                  disabled={isCreating || isUpdating}
+                  className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 flex-row justify-between items-center"
+                >
+                  <Text
+                    className={
+                      formData.time ? 'text-gray-900' : 'text-gray-400'
+                    }
+                  >
+                    {formData.time || 'Select Time'}
+                  </Text>
+                  <Clock size={18} color="#666" />
+                </TouchableOpacity>
               </View>
 
               {/* Host Name */}
@@ -435,7 +478,7 @@ export default function AdminEventsTab() {
                 />
               </View>
 
-              {/* Registration Fee (conditional) */}
+              {/* Registration Fee */}
               {formData.is_paid && (
                 <View className="mb-4">
                   <Text className="text-sm font-semibold text-gray-700 mb-2">
@@ -475,6 +518,27 @@ export default function AdminEventsTab() {
           </View>
         </View>
       </Modal>
+
+      {/* --- Date & Time Pickers --- */}
+      <DateTimePickerModal
+        isVisible={isDatePickerVisible}
+        mode="date"
+        onConfirm={handleConfirmDate}
+        onCancel={hideDatePicker}
+        date={formData.date ? new Date(formData.date) : new Date()}
+      />
+      <DateTimePickerModal
+        isVisible={isTimePickerVisible}
+        mode="time"
+        onConfirm={handleConfirmTime}
+        onCancel={hideTimePicker}
+        // Fallback to current time if creating, parse existing if editing
+        date={
+          formData.time
+            ? new Date(`2000-01-01T${formData.time}:00`)
+            : new Date()
+        }
+      />
     </View>
   );
 }

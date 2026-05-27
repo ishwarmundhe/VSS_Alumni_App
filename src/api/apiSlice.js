@@ -1,21 +1,27 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import { API_URL } from '@env';
 
-// Define the base API slice
 export const apiSlice = createApi({
   reducerPath: 'api',
   baseQuery: fetchBaseQuery({
-    baseUrl: 'http://85.25.172.10:8002',
+    baseUrl: API_URL,
     prepareHeaders: (headers, { getState }) => {
-      const token = getState().auth.token;
+      const token = getState().auth?.token;
       if (token) {
         headers.set('authorization', `Bearer ${token}`);
       }
       return headers;
     },
   }),
-  tagTypes: ['User', 'PendingUsers', 'Alumni', 'CurrentUser', 'Avatar', 'Events'],
+  tagTypes: [
+    'User',
+    'PendingUsers',
+    'Alumni',
+    'CurrentUser',
+    'Avatar',
+    'Events',
+  ],
   endpoints: builder => ({
-    // --- AUTHENTICATION ---
     loginWithPassword: builder.mutation({
       query: credentials => {
         const formBody = new URLSearchParams();
@@ -23,7 +29,7 @@ export const apiSlice = createApi({
         formBody.append('password', credentials.password);
 
         return {
-          url: '/v1/auth/login/password',
+          url: '/admin/login',
           method: 'POST',
           body: formBody.toString(),
           headers: {
@@ -35,7 +41,7 @@ export const apiSlice = createApi({
 
     sendOtp: builder.mutation({
       query: data => ({
-        url: '/v1/auth/send-otp',
+        url: '/send-otp',
         method: 'POST',
         body: data,
       }),
@@ -43,7 +49,7 @@ export const apiSlice = createApi({
 
     verifyOtp: builder.mutation({
       query: data => ({
-        url: '/v1/auth/verify-otp',
+        url: '/verify-otp',
         method: 'POST',
         body: data,
       }),
@@ -52,7 +58,7 @@ export const apiSlice = createApi({
     // --- USER PROFILE & REGISTRATION ---
     registerUser: builder.mutation({
       query: data => ({
-        url: '/v1/users/register',
+        url: '/register',
         method: 'POST',
         body: data,
       }),
@@ -60,7 +66,7 @@ export const apiSlice = createApi({
 
     updateProfile: builder.mutation({
       query: ({ userId, ...profileData }) => ({
-        url: `/v1/user/profile/${userId}`,
+        url: `/users/${userId}`,
         method: 'PUT',
         body: profileData,
       }),
@@ -68,35 +74,36 @@ export const apiSlice = createApi({
     }),
 
     getUserDetails: builder.query({
-      query: userId => `/v1/users/${userId}`,
+      query: userId => `/users/${userId}`,
       providesTags: ['User'],
     }),
 
     approveUser: builder.mutation({
       query: userId => ({
-        url: `/v1/admin/approve/${userId}`,
+        url: `/admin/approve/${userId}`,
         method: 'PUT',
       }),
       invalidatesTags: ['PendingUsers', 'Alumni'],
     }),
 
     getPendingUsers: builder.query({
-      query: () => '/v1/admin/pending',
+      query: () => '/admin/pending',
       providesTags: ['PendingUsers'],
     }),
 
     getAlumniUsers: builder.query({
-      query: () => '/v1/admin/alumni',
+      query: () => '/admin/alumni',
       providesTags: ['Alumni'],
     }),
 
     getAlumniStats: builder.query({
-      query: () => '/v1/alumni/stats',
+      query: () => '/alumni/stats',
       providesTags: ['PendingUsers', 'Alumni'],
     }),
+
     getDirectoryUsers: builder.query({
       query: params => ({
-        url: '/v1/users/alumni',
+        url: '/alumni',
         method: 'GET',
         params: params,
       }),
@@ -104,13 +111,13 @@ export const apiSlice = createApi({
     }),
 
     getCurrentUser: builder.query({
-      query: () => '/v1/users/me',
+      query: () => '/me',
       providesTags: ['CurrentUser'],
     }),
 
     updateCurrentUser: builder.mutation({
       query: profileData => ({
-        url: '/v1/users/me',
+        url: '/me',
         method: 'PUT',
         body: profileData,
       }),
@@ -119,7 +126,7 @@ export const apiSlice = createApi({
 
     updateUserAddress: builder.mutation({
       query: ({ addressId, ...addressData }) => ({
-        url: `/v1/users/me/addresses/${addressId}`,
+        url: `/me/addresses/${addressId}`,
         method: 'PUT',
         body: addressData,
       }),
@@ -128,7 +135,7 @@ export const apiSlice = createApi({
 
     updateProfilePicture: builder.mutation({
       query: formData => ({
-        url: '/v1/users/me/profile-picture',
+        url: '/me/avatar',
         method: 'PUT',
         body: formData,
       }),
@@ -137,13 +144,13 @@ export const apiSlice = createApi({
 
     // --- AVATAR MANAGEMENT ---
     getAvatar: builder.query({
-      query: () => '/v1/me/avatar',
+      query: () => '/me/avatar',
       providesTags: ['Avatar'],
     }),
 
     uploadAvatar: builder.mutation({
       query: formData => ({
-        url: '/v1/me/avatar',
+        url: '/me/avatar',
         method: 'POST',
         body: formData,
       }),
@@ -152,7 +159,7 @@ export const apiSlice = createApi({
 
     updateAvatar: builder.mutation({
       query: formData => ({
-        url: '/v1/me/avatar',
+        url: '/me/avatar',
         method: 'PUT',
         body: formData,
       }),
@@ -161,7 +168,7 @@ export const apiSlice = createApi({
 
     deleteAvatar: builder.mutation({
       query: () => ({
-        url: '/v1/me/avatar',
+        url: '/me/avatar',
         method: 'DELETE',
       }),
       invalidatesTags: ['Avatar', 'CurrentUser'],
@@ -170,7 +177,7 @@ export const apiSlice = createApi({
     // --- EVENTS MANAGEMENT ---
     getEvents: builder.query({
       query: params => ({
-        url: '/v1/events',
+        url: '/events',
         method: 'GET',
         params: params,
       }),
@@ -178,13 +185,13 @@ export const apiSlice = createApi({
     }),
 
     getEventById: builder.query({
-      query: eventId => `/v1/events/${eventId}`,
+      query: eventId => `/events/${eventId}`,
       providesTags: ['Events'],
     }),
 
     createEvent: builder.mutation({
       query: eventData => ({
-        url: '/v1/events',
+        url: '/events',
         method: 'POST',
         body: eventData,
       }),
@@ -193,7 +200,7 @@ export const apiSlice = createApi({
 
     updateEvent: builder.mutation({
       query: ({ eventId, ...eventData }) => ({
-        url: `/v1/events/${eventId}`,
+        url: `/events/${eventId}`,
         method: 'PUT',
         body: eventData,
       }),
@@ -202,7 +209,7 @@ export const apiSlice = createApi({
 
     deleteEvent: builder.mutation({
       query: eventId => ({
-        url: `/v1/events/${eventId}`,
+        url: `/events/${eventId}`,
         method: 'DELETE',
       }),
       invalidatesTags: ['Events'],
@@ -210,7 +217,7 @@ export const apiSlice = createApi({
 
     uploadEventBanner: builder.mutation({
       query: ({ eventId, formData }) => ({
-        url: `/v1/events/${eventId}/banner`,
+        url: `/events/${eventId}/banner`,
         method: 'POST',
         body: formData,
       }),

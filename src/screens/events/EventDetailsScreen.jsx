@@ -96,7 +96,7 @@ export default function EventDetailsScreen({ route, navigation }) {
             uri: event.banner_url || 'https://via.placeholder.com/400x200',
           }}
           className="w-full h-56 bg-gray-300"
-          defaultSource={require('../../assets/placeholder.png')}
+          //defaultSource={require('../../assets/placeholder.png')}
         >
           <SafeAreaView
             edges={['top']}
