@@ -17,7 +17,6 @@ import {
   Clock,
   Calendar,
   Users,
-  DollarSign,
   Share2,
   Trash2,
 } from 'lucide-react-native';
@@ -170,7 +169,6 @@ export default function EventDetailsScreen({ route, navigation }) {
             <View className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
               <View className="flex-row items-center justify-between">
                 <View className="flex-row items-center gap-2">
-                  <DollarSign size={20} color="#16a34a" />
                   <View>
                     <Text className="text-xs text-green-700 font-semibold">
                       REGISTRATION FEE

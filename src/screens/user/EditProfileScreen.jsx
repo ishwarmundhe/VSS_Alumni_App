@@ -28,15 +28,53 @@ import {
   Building,
   GraduationCap,
 } from 'lucide-react-native';
-import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
+
+import ImagePicker from 'react-native-image-crop-picker';
 import Toast from 'react-native-toast-message';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 import {
   useGetCurrentUserQuery,
   useUpdateCurrentUserMutation,
   useUpdateUserAddressMutation,
-  useUpdateProfilePictureMutation,
+  useUpdateAvatarMutation, // 🚨 FIXED: Swapped to the requested hook
 } from '../../api/apiSlice';
+
+// --- Validation Helpers ---
+const isValidEmail = email => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const isExact6Digits = val => !val || /^\d{6}$/.test(val);
+const isExact4Digits = val => !val || /^\d{4}$/.test(val);
+
+const InputField = ({ label, value, onChangeText, ...props }) => (
+  <View className="mb-3">
+    <Text className="text-xs text-gray-500 mb-1">{label}</Text>
+    <TextInput
+      placeholderTextColor="#9CA3AF"
+      className="bg-gray-50 p-3 rounded-lg border border-gray-200 text-[#1C1C1C]"
+      value={value}
+      onChangeText={onChangeText}
+      {...props}
+    />
+  </View>
+);
+
+const InfoRow = ({ label, value, icon: Icon }) => (
+  <View className="flex-row items-center py-3 border-b border-gray-50">
+    {Icon && (
+      <View className="mr-4 justify-center">
+        <Icon size={24} color="#1A3673" strokeWidth={2} />
+      </View>
+    )}
+    <View className="flex-1 justify-center">
+      <Text className="text-[11px] uppercase text-gray-400 font-bold tracking-wider mb-0.5">
+        {label}
+      </Text>
+      <Text className="text-[#1C1C1C] text-base font-bold">
+        {value || 'Not provided'}
+      </Text>
+    </View>
+  </View>
+);
 
 export default function EditProfileScreen({ navigation }) {
   const {
@@ -47,15 +85,19 @@ export default function EditProfileScreen({ navigation }) {
     refetchOnMountOrArgChange: true,
   });
 
+  console.log('update user data', user);
+
   const [isEditing, setIsEditing] = useState(false);
 
   const [updateUser, { isLoading: isUpdatingUser }] =
     useUpdateCurrentUserMutation();
   const [updateAddress, { isLoading: isUpdatingAddress }] =
     useUpdateUserAddressMutation();
-  const [updateProfilePicture, { isLoading: isUpdatingImage }] =
-    useUpdateProfilePictureMutation();
+  const [updateAvatar, { isLoading: isUpdatingImage }] =
+    useUpdateAvatarMutation();
 
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [pickerDate, setPickerDate] = useState(new Date());
   const [formData, setFormData] = useState({});
   const [addressData, setAddressData] = useState({});
   const [newProfileImage, setNewProfileImage] = useState(null);
@@ -100,45 +142,103 @@ export default function EditProfileScreen({ navigation }) {
     }
   }, [user]);
 
+  const handleDateChange = (event, selectedDate) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (event.type === 'set' && selectedDate) {
+      setShowDatePicker(false);
+      setPickerDate(selectedDate);
+      const y = selectedDate.getFullYear();
+      const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
+      const d = String(selectedDate.getDate()).padStart(2, '0');
+      handleUpdateField('birth_date', `${y}-${m}-${d}`);
+    } else if (event.type === 'dismissed') {
+      setShowDatePicker(false);
+    }
+  };
+
   const handleUpdateField = (field, value) =>
     setFormData(prev => ({ ...prev, [field]: value }));
   const handleUpdateAddress = (field, value) =>
     setAddressData(prev => ({ ...prev, [field]: value }));
 
-  const requestCameraPermission = async () => {
-    if (Platform.OS === 'android') {
-      try {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.CAMERA,
-        );
-        return granted === PermissionsAndroid.RESULTS.GRANTED;
-      } catch (err) {
-        return false;
-      }
-    }
-    return true;
-  };
-
   const handleCameraLaunch = async () => {
     setShowImagePickerModal(false);
-    const hasPermission = await requestCameraPermission();
-    if (hasPermission) {
-      const result = await launchCamera({ mediaType: 'photo', quality: 0.7 });
-      if (result.assets?.length) setNewProfileImage(result.assets[0].uri);
+    try {
+      const image = await ImagePicker.openCamera({
+        width: 400,
+        height: 400,
+        cropping: true,
+        cropperCircleOverlay: true,
+        mediaType: 'photo',
+      });
+      setNewProfileImage(image.path);
+    } catch (e) {
+      if (e.code !== 'E_PICKER_CANCELLED') console.log(e);
     }
   };
 
   const handleGalleryLaunch = async () => {
     setShowImagePickerModal(false);
-    const result = await launchImageLibrary({
-      mediaType: 'photo',
-      selectionLimit: 1,
-      quality: 0.7,
-    });
-    if (result.assets?.length) setNewProfileImage(result.assets[0].uri);
+    try {
+      const image = await ImagePicker.openPicker({
+        width: 400,
+        height: 400,
+        cropping: true,
+        cropperCircleOverlay: true,
+        mediaType: 'photo',
+      });
+      setNewProfileImage(image.path);
+    } catch (e) {
+      if (e.code !== 'E_PICKER_CANCELLED') console.log(e);
+    }
+  };
+
+  const validateForm = () => {
+    if (formData.email && !isValidEmail(formData.email)) {
+      Toast.show({
+        type: 'error',
+        text1: 'Validation Error',
+        text2: 'Invalid Email Address',
+      });
+      return false;
+    }
+    if (addressData.pincode && !isExact6Digits(addressData.pincode)) {
+      Toast.show({
+        type: 'error',
+        text1: 'Validation Error',
+        text2: 'Pincode must be exactly 6 digits',
+      });
+      return false;
+    }
+    if (
+      (formData.from_year && !isExact4Digits(formData.from_year)) ||
+      (formData.to_year && !isExact4Digits(formData.to_year))
+    ) {
+      Toast.show({
+        type: 'error',
+        text1: 'Validation Error',
+        text2: 'Years must be exactly 4 digits',
+      });
+      return false;
+    }
+    if (
+      formData.from_year &&
+      formData.to_year &&
+      parseInt(formData.to_year) < parseInt(formData.from_year)
+    ) {
+      Toast.show({
+        type: 'error',
+        text1: 'Validation Error',
+        text2: 'To Year cannot be before From Year',
+      });
+      return false;
+    }
+    return true;
   };
 
   const handleSave = async () => {
+    if (!validateForm()) return;
+
     try {
       const parsedFromYear = formData.from_year
         ? parseInt(formData.from_year, 10)
@@ -167,10 +267,10 @@ export default function EditProfileScreen({ navigation }) {
 
       await updateUser(cleanProfile).unwrap();
 
-      if (addressData.id || Object.keys(addressData).length > 2) {
+      if (addressData.address_id) {
         try {
           const cleanAddress = {
-            addressId: addressData.id,
+            addressId: addressData.address_id,
             address_type: addressData.address_type || 'HOME',
             house_no: addressData.house_no || null,
             building_name: addressData.building_name || null,
@@ -184,27 +284,16 @@ export default function EditProfileScreen({ navigation }) {
           };
           await updateAddress(cleanAddress).unwrap();
         } catch (addrError) {
-          console.warn(
-            'Backend crashed on Address update, ignoring...',
-            addrError,
-          );
+          console.warn('Address update failed:', addrError);
         }
       }
 
+      // 🚨 FIXED: Calling updateAvatar directly here
       if (newProfileImage) {
         try {
-          const imagePayload = new FormData();
-          imagePayload.append('profile_image', {
-            uri: newProfileImage,
-            name: 'profile_photo.jpg',
-            type: 'image/jpeg',
-          });
-          await updateProfilePicture(imagePayload).unwrap();
+          await updateAvatar(newProfileImage).unwrap();
         } catch (imgError) {
-          console.warn(
-            'Backend crashed on Image update, ignoring...',
-            imgError,
-          );
+          console.warn('Avatar update failed:', imgError);
         }
       }
 
@@ -214,6 +303,7 @@ export default function EditProfileScreen({ navigation }) {
         text2: 'Profile updated successfully!',
       });
       setIsEditing(false);
+      setNewProfileImage(null);
       refetch();
     } catch (error) {
       console.error('--- PROFILE UPDATE FAILED ---', error);
@@ -235,39 +325,6 @@ export default function EditProfileScreen({ navigation }) {
 
   const isSaving = isUpdatingUser || isUpdatingAddress || isUpdatingImage;
 
-  // --- REUSABLE COMPONENTS ---
-  const InputField = ({ label, value, onChangeText, ...props }) => (
-    <View className="mb-3">
-      <Text className="text-xs text-gray-500 mb-1">{label}</Text>
-      <TextInput
-        placeholderTextColor="#9CA3AF"
-        className="bg-gray-50 p-3 rounded-lg border border-gray-200 text-[#1C1C1C]"
-        value={value}
-        onChangeText={onChangeText}
-        {...props}
-      />
-    </View>
-  );
-
- const InfoRow = ({ label, value, icon: Icon }) => (
-   <View className="flex-row items-center py-3 border-b border-gray-50 last:border-0">
-     {Icon && (
-       <View className="mr-4 justify-center">
-         <Icon size={24} color="#1A3673" strokeWidth={2} />
-       </View>
-     )}
-     <View className="flex-1 justify-center">
-       <Text className="text-[11px] uppercase text-gray-400 font-bold tracking-wider mb-0.5">
-         {label}
-       </Text>
-       <Text className="text-[#1C1C1C] text-base font-bold">
-         {value || 'Not provided'}
-       </Text>
-     </View>
-   </View>
- );
-
-  // Helper to construct the full address string cleanly
   const getFullAddress = () => {
     if (!user?.addresses?.[0]) return 'No address set';
     const a = user.addresses[0];
@@ -285,10 +342,16 @@ export default function EditProfileScreen({ navigation }) {
       .join(', ');
   };
 
+  // 🚨 UI FIX: Cache bust the old image if returning from backend
+  const displayImageUri = newProfileImage
+    ? newProfileImage
+    : user?.profile_image
+      ? `${user.profile_image}?t=${new Date().getTime()}`
+      : 'https://via.placeholder.com/150';
+
   return (
     <View style={{ flex: 1, backgroundColor: '#F8F9FA' }}>
       <StatusBar barStyle="light-content" backgroundColor="#1A3673" />
-
 
       <View className="bg-[#1A3673] pt-14 pb-4 px-4 flex-row items-center justify-between z-10">
         <View className="flex-row items-center gap-4">
@@ -330,12 +393,7 @@ export default function EditProfileScreen({ navigation }) {
             className="relative mt-2"
           >
             <Image
-              source={{
-                uri:
-                  newProfileImage ||
-                  user?.profile_image ||
-                  'https://via.placeholder.com/150',
-              }}
+              source={{ uri: displayImageUri }}
               className="w-28 h-28 rounded-full border-4 border-white shadow-lg bg-gray-200"
             />
             {isEditing && (
@@ -435,9 +493,8 @@ export default function EditProfileScreen({ navigation }) {
             </View>
           </View>
         ) : (
-
           <View className="px-4 pb-10">
-            {/* Personal Info */}
+            {/* Edit Fields */}
             <Text className="font-bold text-[#1A3673] mb-2 uppercase text-xs tracking-wider ml-1">
               Personal Info
             </Text>
@@ -464,11 +521,31 @@ export default function EditProfileScreen({ navigation }) {
                 keyboardType="email-address"
                 onChangeText={t => handleUpdateField('email', t)}
               />
-              <InputField
-                label="Birth Date (YYYY-MM-DD)"
-                value={formData.birth_date}
-                onChangeText={t => handleUpdateField('birth_date', t)}
-              />
+              <View className="mb-3">
+                <Text className="text-xs text-gray-500 mb-1">Birth Date</Text>
+                <TouchableOpacity
+                  onPress={() => setShowDatePicker(true)}
+                  className="bg-gray-50 p-3 rounded-lg border border-gray-200 flex-row justify-between items-center"
+                >
+                  <Text
+                    className={
+                      formData.birth_date ? 'text-[#1C1C1C]' : 'text-gray-400'
+                    }
+                  >
+                    {formData.birth_date || 'Select date'}
+                  </Text>
+                  <Calendar size={18} color="#9CA3AF" />
+                </TouchableOpacity>
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={pickerDate}
+                    mode="date"
+                    display="default"
+                    onChange={handleDateChange}
+                    maximumDate={new Date()}
+                  />
+                )}
+              </View>
               <InputField
                 label="Gender"
                 value={formData.gender}
@@ -476,7 +553,7 @@ export default function EditProfileScreen({ navigation }) {
               />
             </View>
 
-            {/* Samiti Details */}
+            {/* ... Rest of Edit Fields ... */}
             <Text className="font-bold text-[#1A3673] mb-2 uppercase text-xs tracking-wider ml-1">
               Samiti Details
             </Text>
@@ -490,29 +567,39 @@ export default function EditProfileScreen({ navigation }) {
                 label="Duration of Stay (Years)"
                 value={formData.duration_of_stay}
                 keyboardType="numeric"
-                onChangeText={t => handleUpdateField('duration_of_stay', t)}
+                onChangeText={t =>
+                  handleUpdateField(
+                    'duration_of_stay',
+                    t.replace(/[^0-9]/g, ''),
+                  )
+                }
               />
               <View className="flex-row gap-4">
                 <View className="flex-1">
                   <InputField
                     label="From Year"
+                    maxLength={4}
                     value={formData.from_year}
                     keyboardType="numeric"
-                    onChangeText={t => handleUpdateField('from_year', t)}
+                    onChangeText={t =>
+                      handleUpdateField('from_year', t.replace(/[^0-9]/g, ''))
+                    }
                   />
                 </View>
                 <View className="flex-1">
                   <InputField
                     label="To Year"
+                    maxLength={4}
                     value={formData.to_year}
                     keyboardType="numeric"
-                    onChangeText={t => handleUpdateField('to_year', t)}
+                    onChangeText={t =>
+                      handleUpdateField('to_year', t.replace(/[^0-9]/g, ''))
+                    }
                   />
                 </View>
               </View>
             </View>
 
-            {/* Professional Info */}
             <Text className="font-bold text-[#1A3673] mb-2 uppercase text-xs tracking-wider ml-1">
               Professional Info
             </Text>
@@ -534,7 +621,6 @@ export default function EditProfileScreen({ navigation }) {
               />
             </View>
 
-            {/* Address */}
             <Text className="font-bold text-[#1A3673] mb-2 uppercase text-xs tracking-wider ml-1">
               Address
             </Text>
@@ -592,9 +678,12 @@ export default function EditProfileScreen({ navigation }) {
                 <View className="flex-1">
                   <InputField
                     label="Pincode"
+                    maxLength={6}
                     value={addressData.pincode}
                     keyboardType="numeric"
-                    onChangeText={t => handleUpdateAddress('pincode', t)}
+                    onChangeText={t =>
+                      handleUpdateAddress('pincode', t.replace(/[^0-9]/g, ''))
+                    }
                   />
                 </View>
               </View>
@@ -602,7 +691,7 @@ export default function EditProfileScreen({ navigation }) {
 
             <TouchableOpacity
               onPress={handleSave}
-              className="bg-[#1A3673] py-4 rounded-2xl items-center shadow-md"
+              className="bg-[#1A3673] py-4 rounded-2xl items-center shadow-md mb-80"
             >
               <Text className="text-white font-bold text-lg">Save Changes</Text>
             </TouchableOpacity>

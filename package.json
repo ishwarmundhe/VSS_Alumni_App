@@ -23,6 +23,8 @@
     "nativewind": "^4.2.1",
     "react": "19.2.0",
     "react-native": "0.83.1",
+    "react-native-calendar-picker": "^8.0.5",
+    "react-native-calendars": "^1.1314.0",
     "react-native-gesture-handler": "^2.30.0",
     "react-native-image-crop-picker": "^0.51.1",
     "react-native-image-picker": "^8.2.1",

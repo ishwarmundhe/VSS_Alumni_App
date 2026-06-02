@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,45 +11,57 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  Bell,
-  Calendar,
-  TrendingUp,
-  Users,
-  Heart,
-  Award,
-  Home,
-  User,
-  Briefcase,
-  ChevronRight,
-  Star,
-  MapPin,
-} from 'lucide-react-native';
+import { Bell, Calendar, Users, Heart, Award } from 'lucide-react-native';
 
 // Import the API hooks
 import {
   useGetCurrentUserQuery,
   useGetAlumniStatsQuery,
   useGetEventsQuery,
+  useGetDirectoryUsersQuery,
 } from '../../api/apiSlice';
+
+// Helper to format date nicely (e.g., "Sun, Feb 15")
+const formatEventDate = dateString => {
+  if (!dateString) return '';
+  const [y, m, d] = dateString.split('-');
+  const date = new Date(y, m - 1, d);
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+};
 
 export default function HomeScreen({ navigation }) {
   const nav = screen => navigation.navigate(screen);
 
   // Fetch Current User Data
   const { data: user, isFetching, refetch } = useGetCurrentUserQuery();
+  console.log('Home user data', user);
+
   const {
     data: stats = { total_count: 0, approved_count: 0, pending_count: 0 },
     refetch: refetchStats,
   } = useGetAlumniStatsQuery();
+
   const { data: events = [], isFetching: isEventsFetching } =
     useGetEventsQuery();
+
+  const { data: alumni = [] } = useGetDirectoryUsersQuery();
+  const AlumniCount = alumni.length || 0;
 
   // Safely extract user details with fallbacks
   const fullName = user
     ? `${user.first_name || ''} ${user.last_name || ''}`.trim()
     : 'Alumni';
-  const profileImage = user?.profile_image || 'https://via.placeholder.com/150';
+
+  const profileImage = useMemo(() => {
+    return user?.profile_image
+      ? `${user.profile_image}?t=${Date.now()}`
+      : 'https://img.magnific.com/free-vector/blue-circle-with-white-user_78370-4707.jpg?semt=ais_hybrid&w=740&q=80';
+  }, [user]);
+
   const batchString =
     user?.from_year && user?.to_year
       ? `Batch ${user.from_year}-${user.to_year}`
@@ -59,25 +71,25 @@ export default function HomeScreen({ navigation }) {
     user?.addresses && user?.addresses.length > 0 ? user.addresses[0] : null;
   const locationString = primaryAddress?.city
     ? `${primaryAddress.city}${primaryAddress.state ? `, ${primaryAddress.state.substring(0, 2).toUpperCase()}` : ''}`
-    : 'Location Pending';
+    : '-';
 
-  // Mock data for the new "Jobs" section
-  const recentJobs = [
-    {
-      id: 1,
-      title: 'Senior React Developer',
-      company: 'TechFlow',
-      loc: 'Pune (Hybrid)',
-      type: 'Full-time',
-    },
-    {
-      id: 2,
-      title: 'Product Manager',
-      company: 'Zomato',
-      loc: 'Bangalore',
-      type: 'Remote',
-    },
-  ];
+  // Filter and sort the top 3 upcoming events
+  const upcomingEvents = useMemo(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    return events
+      .filter(e => {
+        const [y, m, d] = e.date.split('-');
+        return new Date(Number(y), Number(m) - 1, Number(d)) >= now;
+      })
+      .sort(
+        (a, b) =>
+          new Date(`${a.date}T${a.time || '00:00'}`) -
+          new Date(`${b.date}T${b.time || '00:00'}`),
+      )
+      .slice(0, 3); // Capped at exactly 3 events
+  }, [events]);
 
   return (
     <View className="flex-1 bg-[#2E4A8A]">
@@ -151,7 +163,7 @@ export default function HomeScreen({ navigation }) {
                   Total Alumni
                 </Text>
                 <Text className="text-lg font-bold text-[#1C1C1C]">
-                  {stats?.total_count || '1001'}
+                  {AlumniCount || '-'}
                 </Text>
               </View>
             </View>
@@ -168,80 +180,102 @@ export default function HomeScreen({ navigation }) {
                   Upcoming Events
                 </Text>
                 <Text className="text-lg font-bold text-[#1C1C1C]">
-                  {events?.length || '0'}
+                  {events?.filter(e => {
+                    const [y, m, d] = e.date.split('-');
+                    const now = new Date();
+                    now.setHours(0, 0, 0, 0);
+                    return new Date(Number(y), Number(m) - 1, Number(d)) >= now;
+                  }).length || '0'}
                 </Text>
               </View>
             </Pressable>
           </View>
 
-          {/* 2. ALUMNI MEET CARD */}
-          <Pressable
-            onPress={() => nav('Updates')}
-            className="bg-[#2E4A8A] rounded-2xl p-6 shadow-md overflow-hidden relative"
-          >
-            {/* Background Pattern */}
-            <View className="absolute -right-8 -top-8 w-32 h-32 bg-white/5 rounded-full" />
-            <View className="absolute -left-8 -bottom-8 w-24 h-24 bg-white/5 rounded-full" />
-
-            <View className="flex-row items-start justify-between mb-4">
-              <View className="w-10 h-10 bg-white/20 rounded-lg items-center justify-center backdrop-blur-sm">
-                <Calendar size={20} color="#FFFFFF" />
-              </View>
-              <View className="bg-[#1F8F3A] px-3 py-1 rounded-full shadow-sm">
-                <Text className="text-white text-[10px] font-bold uppercase tracking-wider">
-                  Upcoming
-                </Text>
-              </View>
-            </View>
-            <Text className="text-white text-xl font-bold mb-1">
-              Annual Alumni Meet 2026
-            </Text>
-            <Text className="text-blue-100 text-sm mb-4">
-              Sunday of February • Pune
-            </Text>
-            <Text className="text-white/80 text-xs leading-5 bg-black/10 p-2 rounded-lg">
-              Join us for our yearly gathering. Reconnect with old friends and
-              make new connections.
-            </Text>
-          </Pressable>
-
-          {/* 3. SAMITI UPDATES */}
-
-          {/* <View>
+          {/* 2. DYNAMIC UPCOMING EVENTS SCROLL */}
+          <View>
             <View className="flex-row items-center justify-between mb-3">
               <Text className="text-[#1C1C1C] text-lg font-bold">
-                Latest Updates
+                Featured Events
               </Text>
-              <Pressable onPress={() => nav('Updates')}>
+              <Pressable onPress={() => nav('Events')}>
                 <Text className="text-sm text-[#2E4A8A] font-semibold">
                   View All
                 </Text>
               </Pressable>
             </View>
-            <Pressable
-              onPress={() => nav('Updates')}
-              className="bg-white rounded-xl p-3 flex-row gap-3 shadow-sm border border-gray-100"
-            >
-              <Image
-                source={{
-                  uri: 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80',
-                }}
-                className="w-16 h-16 rounded-lg bg-gray-200"
-                resizeMode="cover"
-              />
-              <View className="flex-1 justify-center">
-                <Text className="text-[#1C1C1C] font-bold text-base mb-1">
-                  New Hostel Wing
+
+            {upcomingEvents.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                // Adds a negative margin trick so the cards scroll seamlessly to the edge of the screen
+                className="-mx-6"
+                contentContainerStyle={{ paddingHorizontal: 24, gap: 16 }}
+              >
+                {upcomingEvents.map(event => (
+                  <Pressable
+                    key={event.id}
+                    onPress={() =>
+                      navigation.navigate('EventDetails', { eventId: event.id })
+                    }
+                    className="bg-[#2E4A8A] rounded-2xl p-6 shadow-md overflow-hidden relative w-[310px]"
+                  >
+                    {/* Background Pattern */}
+                    <View className="absolute -right-8 -top-8 w-32 h-32 bg-white/5 rounded-full" />
+                    <View className="absolute -left-8 -bottom-8 w-24 h-24 bg-white/5 rounded-full" />
+
+                    <View className="flex-row items-start justify-between mb-4">
+                      <View className="w-10 h-10 bg-white/20 rounded-lg items-center justify-center backdrop-blur-sm">
+                        <Calendar size={20} color="#FFFFFF" />
+                      </View>
+                      <View className="bg-[#1F8F3A] px-3 py-1 rounded-full shadow-sm flex-row items-center gap-1">
+                        <Text className="text-white text-[10px] font-bold uppercase tracking-wider">
+                          {event.is_paid ? 'Paid' : 'Free'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Text
+                      className="text-white text-xl font-bold mb-1"
+                      numberOfLines={1}
+                    >
+                      {event.event_name}
+                    </Text>
+
+                    <Text className="text-blue-100 text-sm mb-4">
+                      {formatEventDate(event.date)} •{' '}
+                      {event.event_location || 'Location TBA'}
+                    </Text>
+
+                    <Text
+                      className="text-white/80 text-xs leading-5 bg-black/10 p-2 rounded-lg"
+                      numberOfLines={2}
+                    >
+                      {event.description ||
+                        `Join us for ${event.event_name}. Reconnect with old friends and make new connections.`}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : (
+              <Pressable
+                onPress={() => nav('Events')}
+                className="bg-[#2E4A8A]/90 rounded-2xl p-6 shadow-md items-center justify-center"
+              >
+                <Calendar
+                  size={32}
+                  color="#FFFFFF"
+                  className="mb-3 opacity-50"
+                />
+                <Text className="text-white text-center font-semibold">
+                  No upcoming events right now.
                 </Text>
-                <Text className="text-xs text-gray-500 mb-1" numberOfLines={1}>
-                  Accommodating 50 more students...
+                <Text className="text-blue-200 text-center text-xs mt-1">
+                  Check back later for updates!
                 </Text>
-                <Text className="text-[10px] text-gray-400 font-medium">
-                  2 days ago
-                </Text>
-              </View>
-            </Pressable>
-          </View> */}
+              </Pressable>
+            )}
+          </View>
 
           {/* 4. QUICK ACTIONS */}
           <View>
@@ -296,82 +330,6 @@ export default function HomeScreen({ navigation }) {
               ))}
             </View>
           </View>
-
-          {/* <View>
-            <Text className="text-[#1C1C1C] text-lg font-bold mb-3">
-              Alumni Spotlight
-            </Text>
-            <View className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100">
-              <Image
-                source={{
-                  uri: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
-                }}
-                className="w-full h-32"
-                resizeMode="cover"
-              />
-              <View className="p-4">
-                <View className="flex-row items-center gap-2 mb-2">
-                  <Star size={16} color="#F59E0B" fill="#F59E0B" />
-                  <Text className="text-[#F59E0B] font-bold text-xs uppercase tracking-wide">
-                    Achiever of the Month
-                  </Text>
-                </View>
-                <Text className="text-lg font-bold text-[#1C1C1C] mb-1">
-                  Priya Sharma
-                </Text>
-                <Text className="text-gray-500 text-xs mb-3">
-                  Batch 2012 • Published new research on AI Ethics
-                </Text>
-                <Pressable
-                  onPress={() => nav('Directory')}
-                  className="flex-row items-center"
-                >
-                  <Text className="text-[#2E4A8A] font-semibold text-sm mr-1">
-                    Read Story
-                  </Text>
-                  <ChevronRight size={14} color="#2E4A8A" />
-                </Pressable>
-              </View>
-            </View>
-          </View>
-          <View>
-            <View className="flex-row items-center justify-between mb-3">
-              <Text className="text-[#1C1C1C] text-lg font-bold">
-                Recent Opportunities
-              </Text>
-              <Pressable>
-                <Text className="text-sm text-[#2E4A8A] font-semibold">
-                  View All
-                </Text>
-              </Pressable>
-            </View>
-            <View className="gap-3">
-              {recentJobs.map(job => (
-                <View
-                  key={job.id}
-                  className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex-row items-center gap-3"
-                >
-                  <View className="w-10 h-10 bg-gray-50 rounded-lg items-center justify-center border border-gray-100">
-                    <Briefcase size={18} color="#4B5563" />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="font-bold text-[#1C1C1C]">
-                      {job.title}
-                    </Text>
-                    <Text className="text-xs text-gray-500">
-                      {job.company} • {job.type}
-                    </Text>
-                  </View>
-                  <View className="flex-row items-center gap-1 bg-blue-50 px-2 py-1 rounded">
-                    <MapPin size={10} color="#2E4A8A" />
-                    <Text className="text-[10px] text-[#2E4A8A] font-medium">
-                      {job.loc}
-                    </Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          </View> */}
         </View>
       </ScrollView>
     </View>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -34,6 +34,13 @@ export default function SettingsScreen({ navigation }) {
 
   // Fetch Current User
   const { data: user, isLoading, isError } = useGetCurrentUserQuery();
+
+  // 🚨 FIXED: Safely cache-bust the profile image
+  const profileImage = useMemo(() => {
+    return user?.profile_image
+      ? `${user.profile_image}?t=${Date.now()}`
+      : 'https://img.magnific.com/free-vector/blue-circle-with-white-user_78370-4707.jpg?semt=ais_hybrid&w=740&q=80';
+  }, [user]);
 
   const handleSignOutPress = () => {
     setShowLogoutModal(true);
@@ -153,10 +160,9 @@ export default function SettingsScreen({ navigation }) {
           onPress={() => navigation.navigate('EditProfile')}
           className="flex-row items-center gap-4"
         >
+          {/* 🚨 FIXED: Use the cache-busted image here */}
           <Image
-            source={{
-              uri: user.profile_image,
-            }}
+            source={{ uri: profileImage }}
             className="w-16 h-16 rounded-full border-2 border-white bg-gray-300"
           />
           <View>

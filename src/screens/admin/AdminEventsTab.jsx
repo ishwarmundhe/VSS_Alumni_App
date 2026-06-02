@@ -10,6 +10,7 @@ import {
   Alert,
   FlatList,
   Modal,
+  Image,
 } from 'react-native';
 import {
   Plus,
@@ -20,20 +21,24 @@ import {
   Clock,
   MapPin,
   Users,
+  Image as ImageIcon,
 } from 'lucide-react-native';
 import Toast from 'react-native-toast-message';
-import DateTimePickerModal from 'react-native-modal-datetime-picker'; // <-- Added import
+import DateTimePickerModal from 'react-native-modal-datetime-picker';
+import ImagePicker from 'react-native-image-crop-picker';
 
 import {
   useGetEventsQuery,
   useCreateEventMutation,
   useUpdateEventMutation,
   useDeleteEventMutation,
+  useUploadEventBannerMutation,
 } from '../../api/apiSlice';
 
 export default function AdminEventsTab() {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
+  const [bannerImage, setBannerImage] = useState(null); // Local image URI picked by user
 
   // Date and Time Picker States
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
@@ -53,8 +58,11 @@ export default function AdminEventsTab() {
   const [createEvent, { isLoading: isCreating }] = useCreateEventMutation();
   const [updateEvent, { isLoading: isUpdating }] = useUpdateEventMutation();
   const [deleteEvent, { isLoading: isDeleting }] = useDeleteEventMutation();
+  const [uploadEventBanner, { isLoading: isUploadingBanner }] =
+    useUploadEventBannerMutation();
 
   const handleOpenModal = (event = null) => {
+    setBannerImage(null); // Reset picked image
     if (event) {
       setEditingEvent(event);
       setFormData({
@@ -84,18 +92,31 @@ export default function AdminEventsTab() {
   const handleCloseModal = () => {
     setModalVisible(false);
     setEditingEvent(null);
+    setBannerImage(null);
   };
 
   // --- Picker Handlers ---
   const showDatePicker = () => setDatePickerVisibility(true);
   const hideDatePicker = () => setDatePickerVisibility(false);
 
+  const handleBannerPick = async () => {
+    try {
+      const image = await ImagePicker.openPicker({
+        mediaType: 'photo',
+        cropping: true,
+        width: 800,
+        height: 400, // Enforce a 2:1 rectangle aspect ratio for banners
+      });
+      setBannerImage(image.path);
+    } catch (e) {
+      if (e.code !== 'E_PICKER_CANCELLED') console.log('Banner pick error:', e);
+    }
+  };
+
   const handleConfirmDate = selectedDate => {
-    // Format to local YYYY-MM-DD to avoid UTC timezone shifts
     const year = selectedDate.getFullYear();
     const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
     const day = String(selectedDate.getDate()).padStart(2, '0');
-
     setFormData({ ...formData, date: `${year}-${month}-${day}` });
     hideDatePicker();
   };
@@ -104,53 +125,24 @@ export default function AdminEventsTab() {
   const hideTimePicker = () => setTimePickerVisibility(false);
 
   const handleConfirmTime = selectedTime => {
-    // Format to HH:MM
     const hours = String(selectedTime.getHours()).padStart(2, '0');
     const minutes = String(selectedTime.getMinutes()).padStart(2, '0');
-
     setFormData({ ...formData, time: `${hours}:${minutes}` });
     hideTimePicker();
   };
-  // -----------------------
 
   const validateForm = () => {
-    if (!formData.event_name.trim()) {
+    if (
+      !formData.event_name.trim() ||
+      !formData.date ||
+      !formData.time ||
+      !formData.host_name.trim() ||
+      !formData.event_location.trim()
+    ) {
       Toast.show({
         type: 'error',
         text1: 'Validation Error',
-        text2: 'Event name is required',
-      });
-      return false;
-    }
-    if (!formData.date.trim()) {
-      Toast.show({
-        type: 'error',
-        text1: 'Validation Error',
-        text2: 'Event date is required',
-      });
-      return false;
-    }
-    if (!formData.time.trim()) {
-      Toast.show({
-        type: 'error',
-        text1: 'Validation Error',
-        text2: 'Event time is required',
-      });
-      return false;
-    }
-    if (!formData.host_name.trim()) {
-      Toast.show({
-        type: 'error',
-        text1: 'Validation Error',
-        text2: 'Host name is required',
-      });
-      return false;
-    }
-    if (!formData.event_location.trim()) {
-      Toast.show({
-        type: 'error',
-        text1: 'Validation Error',
-        text2: 'Event location is required',
+        text2: 'Please fill out all required fields',
       });
       return false;
     }
@@ -177,31 +169,49 @@ export default function AdminEventsTab() {
         event_location: formData.event_location,
         is_paid: formData.is_paid,
         ...(formData.is_paid && {
-          registration_fee: parseInt(formData.registration_fee),
+          registration_fee: parseFloat(formData.registration_fee),
         }),
       };
 
-      console.log('Submitting Event:', payload);
+      let savedEventId;
 
       if (editingEvent) {
         await updateEvent({ eventId: editingEvent.id, ...payload }).unwrap();
+        savedEventId = editingEvent.id;
         Toast.show({
           type: 'success',
           text1: 'Success',
           text2: 'Event updated successfully',
         });
       } else {
-        await createEvent(payload).unwrap();
+        const res = await createEvent(payload).unwrap();
+        savedEventId = res.event?.id;
         Toast.show({
           type: 'success',
           text1: 'Success',
           text2: 'Event created successfully',
         });
       }
+
+      // If user selected a NEW banner, upload it using the savedEventId
+      if (bannerImage && savedEventId) {
+        try {
+          await uploadEventBanner({
+            eventId: savedEventId,
+            imageUri: bannerImage,
+          }).unwrap();
+        } catch (bannerError) {
+          Toast.show({
+            type: 'error',
+            text1: 'Banner upload failed',
+            text2: 'Event saved, but image failed to upload.',
+          });
+        }
+      }
+
       handleCloseModal();
       refetch();
     } catch (error) {
-      console.log('Error submitting event:', error);
       Toast.show({
         type: 'error',
         text1: 'Error',
@@ -215,9 +225,10 @@ export default function AdminEventsTab() {
       'Delete Event',
       `Are you sure you want to delete "${event.event_name}"?`,
       [
-        { text: 'Cancel' },
+        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
+          style: 'destructive',
           onPress: async () => {
             try {
               await deleteEvent(event.id).unwrap();
@@ -231,68 +242,90 @@ export default function AdminEventsTab() {
               Toast.show({
                 type: 'error',
                 text1: 'Error',
-                text2: error?.data?.message || 'Failed to delete event',
+                text2: 'Failed to delete event',
               });
             }
           },
-          style: 'destructive',
         },
       ],
     );
   };
 
+  // ─── UPDATED EVENT CARD ──────────────────────────────────────────────────
   const renderEventItem = ({ item: event }) => (
-    <View className="bg-white border border-gray-200 rounded-lg p-4 mb-3">
-      <View className="flex-row justify-between items-start mb-3">
-        <View className="flex-1">
-          <Text className="text-lg font-bold text-gray-900">
-            {event.event_name}
-          </Text>
-          <View className="flex-row items-center gap-2 mt-1">
-            <Users size={14} color="#666" />
-            <Text className="text-xs text-gray-600">{event.host_name}</Text>
+    <View className="bg-white border border-gray-200 rounded-lg mb-4 overflow-hidden">
+      {/* Show actual Banner Image if it exists */}
+      {event.banner_url ? (
+        <Image
+          source={{ uri: event.banner_url }}
+          className="w-full h-32 bg-gray-200"
+          resizeMode="cover"
+        />
+      ) : (
+        <View className="w-full h-16 bg-blue-50 justify-center items-center">
+          <ImageIcon size={24} color="#93c5fd" />
+        </View>
+      )}
+
+      <View className="p-4">
+        <View className="flex-row justify-between items-start mb-3">
+          <View className="flex-1 pr-2">
+            <Text className="text-lg font-bold text-gray-900 mb-1">
+              {event.event_name}
+            </Text>
+            <View className="flex-row items-center gap-1">
+              <Users size={14} color="#666" />
+              <Text className="text-xs text-gray-600">
+                By {event.host_name}
+              </Text>
+            </View>
+          </View>
+
+          <View className="items-end">
+            {event.is_paid ? (
+              <View className="bg-green-50 px-2 py-1 rounded border border-green-100">
+                <Text className="text-xs font-bold text-green-700">
+                  ₹{event.registration_fee}
+                </Text>
+              </View>
+            ) : (
+              <View className="bg-blue-50 px-2 py-1 rounded border border-blue-100">
+                <Text className="text-xs font-bold text-blue-700">Free</Text>
+              </View>
+            )}
           </View>
         </View>
-      </View>
 
-      <View className="flex-row items-center gap-4 mb-3">
-        <View className="flex-row items-center gap-1">
-          <CalendarIcon size={14} color="#666" />
-          <Text className="text-xs text-gray-600">{event.date}</Text>
+        <View className="flex-row items-center gap-4 mb-4">
+          <View className="flex-row items-center gap-1">
+            <CalendarIcon size={14} color="#666" />
+            <Text className="text-xs text-gray-600">{event.date}</Text>
+          </View>
+          <View className="flex-row items-center gap-1">
+            <Clock size={14} color="#666" />
+            <Text className="text-xs text-gray-600">{event.time}</Text>
+          </View>
         </View>
-        <View className="flex-row items-center gap-1">
-          <Clock size={14} color="#666" />
-          <Text className="text-xs text-gray-600">{event.time}</Text>
-        </View>
-        <View className="flex-row items-center gap-1 flex-1">
+
+        <View className="flex-row items-center gap-1 mb-4">
           <MapPin size={14} color="#666" />
-          <Text className="text-xs text-gray-600 flex-1" numberOfLines={1}>
+          <Text className="text-xs text-gray-600" numberOfLines={1}>
             {event.event_location}
           </Text>
         </View>
-      </View>
 
-      <View className="flex-row justify-between items-center border-t border-gray-100 pt-3">
-        <View>
-          {event.is_paid ? (
-            <Text className="text-xs font-semibold text-green-700">
-              Paid • ₹{event.registration_fee}
-            </Text>
-          ) : (
-            <Text className="text-xs font-semibold text-blue-700">Free</Text>
-          )}
-        </View>
-        <View className="flex-row gap-2">
+        <View className="flex-row gap-2 border-t border-gray-100 pt-3">
           <TouchableOpacity
             onPress={() => handleOpenModal(event)}
-            className="p-2 bg-blue-100 rounded"
+            className="flex-1 py-2 bg-blue-50 rounded items-center flex-row justify-center gap-2"
           >
             <Edit2 size={16} color="#2563EB" />
+            <Text className="text-blue-600 font-medium">Edit</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => handleDelete(event)}
             disabled={isDeleting}
-            className="p-2 bg-red-100 rounded"
+            className="py-2 px-4 bg-red-50 rounded items-center"
           >
             <Trash2 size={16} color="#dc2626" />
           </TouchableOpacity>
@@ -303,7 +336,6 @@ export default function AdminEventsTab() {
 
   return (
     <View className="flex-1 bg-gray-50">
-      {/* Header */}
       <View className="bg-white border-b border-gray-200 px-4 py-4">
         <View className="flex-row justify-between items-center">
           <View>
@@ -322,38 +354,34 @@ export default function AdminEventsTab() {
         </View>
       </View>
 
-      {/* Events List */}
       {isFetching ? (
         <View className="flex-1 justify-center items-center">
           <ActivityIndicator size="large" color="#2563EB" />
         </View>
       ) : (
-        <ScrollView
+        <FlatList
           className="flex-1 px-4 py-4"
+          data={events}
+          renderItem={renderEventItem}
+          keyExtractor={item => item.id?.toString()}
           showsVerticalScrollIndicator={false}
-        >
-          {events.length > 0 ? (
-            <FlatList
-              scrollEnabled={false}
-              data={events}
-              renderItem={renderEventItem}
-              keyExtractor={item => item.id?.toString()}
-            />
-          ) : (
-            <View className="flex-1 justify-center items-center py-12">
+          contentContainerStyle={
+            events.length === 0
+              ? { flex: 1, justifyContent: 'center' }
+              : { paddingBottom: 40 }
+          }
+          ListEmptyComponent={
+            <View className="items-center py-12">
               <CalendarIcon size={48} color="#ccc" />
               <Text className="text-gray-500 mt-4 font-semibold">
                 No events yet
               </Text>
-              <Text className="text-gray-400 text-sm mt-1">
-                Create your first event
-              </Text>
             </View>
-          )}
-        </ScrollView>
+          }
+        />
       )}
 
-      {/* Create/Edit Event Modal */}
+      {/* ─── CREATE / EDIT MODAL ──────────────────────────────────────────────── */}
       <Modal
         visible={modalVisible}
         transparent
@@ -361,8 +389,7 @@ export default function AdminEventsTab() {
         onRequestClose={handleCloseModal}
       >
         <View className="flex-1 bg-black/50 justify-end">
-          <View className="bg-white rounded-t-2xl pt-4 max-h-screen">
-            {/* Modal Header */}
+          <View className="bg-white rounded-t-2xl pt-4 max-h-[90%]">
             <View className="flex-row justify-between items-center px-4 pb-4 border-b border-gray-200">
               <Text className="text-xl font-bold text-gray-900">
                 {editingEvent ? 'Edit Event' : 'Create New Event'}
@@ -372,9 +399,38 @@ export default function AdminEventsTab() {
               </TouchableOpacity>
             </View>
 
-            {/* Form */}
             <ScrollView className="px-4 py-4">
-              {/* Event Name */}
+              {/* Banner Upload Placed INSIDE the Form */}
+              <View className="mb-6">
+                <Text className="text-sm font-semibold text-gray-700 mb-2">
+                  Event Banner
+                </Text>
+                <TouchableOpacity
+                  onPress={handleBannerPick}
+                  className="bg-gray-50 border border-dashed border-gray-300 rounded-lg p-1 items-center justify-center min-h-[140px] overflow-hidden"
+                >
+                  {bannerImage || editingEvent?.banner_url ? (
+                    <Image
+                      source={{ uri: bannerImage || editingEvent.banner_url }}
+                      className="w-full h-32 rounded-lg"
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View className="items-center gap-2 py-4">
+                      <ImageIcon size={28} color="#9CA3AF" />
+                      <Text className="text-gray-400 text-sm">
+                        Tap to upload banner
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                {bannerImage && (
+                  <Text className="text-xs text-blue-600 mt-1 mt-2 text-center">
+                    New image selected
+                  </Text>
+                )}
+              </View>
+
               <View className="mb-4">
                 <Text className="text-sm font-semibold text-gray-700 mb-2">
                   Event Name *
@@ -384,55 +440,50 @@ export default function AdminEventsTab() {
                   onChangeText={text =>
                     setFormData({ ...formData, event_name: text })
                   }
-                  placeholder="e.g., Alumni Meet 2026"
+                  placeholder="e.g., Tech Conference 2026"
                   className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 text-gray-900"
-                  editable={!isCreating && !isUpdating}
                 />
               </View>
 
-              {/* Date Picker Button */}
-              <View className="mb-4">
-                <Text className="text-sm font-semibold text-gray-700 mb-2">
-                  Date *
-                </Text>
-                <TouchableOpacity
-                  onPress={showDatePicker}
-                  disabled={isCreating || isUpdating}
-                  className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 flex-row justify-between items-center"
-                >
-                  <Text
-                    className={
-                      formData.date ? 'text-gray-900' : 'text-gray-400'
-                    }
-                  >
-                    {formData.date || 'Select Date'}
+              <View className="flex-row gap-3 mb-4">
+                <View className="flex-1">
+                  <Text className="text-sm font-semibold text-gray-700 mb-2">
+                    Date *
                   </Text>
-                  <CalendarIcon size={18} color="#666" />
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={showDatePicker}
+                    className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 flex-row justify-between items-center"
+                  >
+                    <Text
+                      className={
+                        formData.date ? 'text-gray-900' : 'text-gray-400'
+                      }
+                    >
+                      {formData.date || 'Select Date'}
+                    </Text>
+                    <CalendarIcon size={18} color="#666" />
+                  </TouchableOpacity>
+                </View>
+                <View className="flex-1">
+                  <Text className="text-sm font-semibold text-gray-700 mb-2">
+                    Time *
+                  </Text>
+                  <TouchableOpacity
+                    onPress={showTimePicker}
+                    className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 flex-row justify-between items-center"
+                  >
+                    <Text
+                      className={
+                        formData.time ? 'text-gray-900' : 'text-gray-400'
+                      }
+                    >
+                      {formData.time || 'Select Time'}
+                    </Text>
+                    <Clock size={18} color="#666" />
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              {/* Time Picker Button */}
-              <View className="mb-4">
-                <Text className="text-sm font-semibold text-gray-700 mb-2">
-                  Time *
-                </Text>
-                <TouchableOpacity
-                  onPress={showTimePicker}
-                  disabled={isCreating || isUpdating}
-                  className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 flex-row justify-between items-center"
-                >
-                  <Text
-                    className={
-                      formData.time ? 'text-gray-900' : 'text-gray-400'
-                    }
-                  >
-                    {formData.time || 'Select Time'}
-                  </Text>
-                  <Clock size={18} color="#666" />
-                </TouchableOpacity>
-              </View>
-
-              {/* Host Name */}
               <View className="mb-4">
                 <Text className="text-sm font-semibold text-gray-700 mb-2">
                   Host Name *
@@ -442,13 +493,11 @@ export default function AdminEventsTab() {
                   onChangeText={text =>
                     setFormData({ ...formData, host_name: text })
                   }
-                  placeholder="e.g., Achut Gite"
+                  placeholder="e.g., Ishwar Mundhe"
                   className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 text-gray-900"
-                  editable={!isCreating && !isUpdating}
                 />
               </View>
 
-              {/* Location */}
               <View className="mb-4">
                 <Text className="text-sm font-semibold text-gray-700 mb-2">
                   Location *
@@ -458,59 +507,53 @@ export default function AdminEventsTab() {
                   onChangeText={text =>
                     setFormData({ ...formData, event_location: text })
                   }
-                  placeholder="e.g., Samiti Hall, Pune"
+                  placeholder="e.g., Pune"
                   className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 text-gray-900"
-                  editable={!isCreating && !isUpdating}
                 />
               </View>
 
-              {/* Is Paid Toggle */}
-              <View className="flex-row justify-between items-center bg-gray-50 rounded-lg px-4 py-3 mb-4">
+              <View className="flex-row justify-between items-center bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 mb-4">
                 <Text className="text-sm font-semibold text-gray-700">
-                  Is Paid Event?
+                  Paid Event?
                 </Text>
                 <Switch
                   value={formData.is_paid}
                   onValueChange={value =>
                     setFormData({ ...formData, is_paid: value })
                   }
-                  disabled={isCreating || isUpdating}
                 />
               </View>
 
-              {/* Registration Fee */}
               {formData.is_paid && (
-                <View className="mb-4">
+                <View className="mb-6">
                   <Text className="text-sm font-semibold text-gray-700 mb-2">
                     Registration Fee (₹) *
                   </Text>
                   <TextInput
-                    value={formData.registration_fee.toString()}
+                    value={formData.registration_fee?.toString()}
                     onChangeText={text =>
                       setFormData({
                         ...formData,
                         registration_fee: text ? parseInt(text) : 0,
                       })
                     }
-                    placeholder="500"
+                    placeholder="e.g., 500"
                     keyboardType="numeric"
                     className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 text-gray-900"
-                    editable={!isCreating && !isUpdating}
                   />
                 </View>
               )}
 
-              {/* Submit Button */}
               <TouchableOpacity
                 onPress={handleSubmit}
-                disabled={isCreating || isUpdating}
-                className="bg-blue-600 rounded-lg py-3 mb-4 mt-6"
+                disabled={isCreating || isUpdating || isUploadingBanner}
+                className={`bg-blue-600 rounded-lg py-4 mb-8 ${isCreating || isUpdating || isUploadingBanner ? 'opacity-70' : ''}`}
               >
-                {isCreating || isUpdating ? (
+                {isCreating || isUpdating || isUploadingBanner ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text className="text-white font-semibold text-center">
-                    {editingEvent ? 'Update Event' : 'Create Event'}
+                  <Text className="text-white font-bold text-lg text-center">
+                    {editingEvent ? 'Save Changes' : 'Publish Event'}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -519,20 +562,22 @@ export default function AdminEventsTab() {
         </View>
       </Modal>
 
-      {/* --- Date & Time Pickers --- */}
       <DateTimePickerModal
         isVisible={isDatePickerVisible}
         mode="date"
         onConfirm={handleConfirmDate}
         onCancel={hideDatePicker}
-        date={formData.date ? new Date(formData.date) : new Date()}
+        date={
+          formData.date
+            ? new Date(formData.date.replace(/-/g, '/'))
+            : new Date()
+        }
       />
       <DateTimePickerModal
         isVisible={isTimePickerVisible}
         mode="time"
         onConfirm={handleConfirmTime}
         onCancel={hideTimePicker}
-        // Fallback to current time if creating, parse existing if editing
         date={
           formData.time
             ? new Date(`2000-01-01T${formData.time}:00`)

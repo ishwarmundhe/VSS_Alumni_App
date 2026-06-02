@@ -17,7 +17,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch } from 'react-redux';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
-// 1. REPLACED old image picker with crop-picker
 import ImagePicker from 'react-native-image-crop-picker';
 
 import {
@@ -30,13 +29,23 @@ import {
   Image as ImageIcon,
   X,
   AlertTriangle,
-  Trash2, // 2. IMPORTED Trash2 for the remove button
+  Trash2,
 } from 'lucide-react-native';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { useRegisterUserMutation, apiSlice } from '../../api/apiSlice';
+import {
+  useRegisterUserMutation,
+  useUploadAvatarMutation,
+  apiSlice,
+} from '../../api/apiSlice';
+
 import { submitProfile, setLogout } from '../../store/authSlice';
+
+// Validation Helpers
+const isValidEmail = email => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const isExact6Digits = val => /^\d{6}$/.test(val);
+const isExact4Digits = val => /^\d{4}$/.test(val);
 
 export default function ProfileOnboarding() {
   const dispatch = useDispatch();
@@ -51,6 +60,7 @@ export default function ProfileOnboarding() {
   const [showCancelModal, setShowCancelModal] = useState(false);
 
   const [registerUser, { isLoading: isSubmitting }] = useRegisterUserMutation();
+  const [uploadAvatar] = useUploadAvatarMutation();
 
   const [formData, setFormData] = useState({
     profileImage: null,
@@ -109,7 +119,6 @@ export default function ProfileOnboarding() {
     return true;
   };
 
-  // 3. UPDATED to use ImagePicker.openCamera with cropping
   const handleCameraLaunch = async () => {
     setShowImagePickerModal(false);
     const hasPermission = await requestCameraPermission();
@@ -119,19 +128,17 @@ export default function ProfileOnboarding() {
           width: 400,
           height: 400,
           cropping: true,
-          cropperCircleOverlay: true, // Perfect for profile pictures
+          cropperCircleOverlay: true,
           mediaType: 'photo',
         });
-        updateField('profileImage', image.path); // Note: it uses .path instead of .uri
+        updateField('profileImage', image.path);
       } catch (error) {
-        if (error.code !== 'E_PICKER_CANCELLED') {
+        if (error.code !== 'E_PICKER_CANCELLED')
           console.log('Camera Error: ', error);
-        }
       }
     }
   };
 
-  // 4. UPDATED to use ImagePicker.openPicker with cropping
   const handleGalleryLaunch = async () => {
     setShowImagePickerModal(false);
     try {
@@ -144,13 +151,11 @@ export default function ProfileOnboarding() {
       });
       updateField('profileImage', image.path);
     } catch (error) {
-      if (error.code !== 'E_PICKER_CANCELLED') {
+      if (error.code !== 'E_PICKER_CANCELLED')
         console.log('Gallery Error: ', error);
-      }
     }
   };
 
-  // 5. NEW function to clear the photo
   const handleRemovePhoto = () => {
     updateField('profileImage', null);
     setShowImagePickerModal(false);
@@ -207,19 +212,13 @@ export default function ProfileOnboarding() {
       ],
     };
 
-    const payload = new FormData();
-    payload.append('data', JSON.stringify(userData));
-
-    if (formData.profileImage) {
-      payload.append('profile_image', {
-        uri: formData.profileImage, // image.path still works fine passed as uri here
-        name: 'profile_photo.jpg',
-        type: 'image/jpeg',
-      });
-    }
-
     try {
-      await registerUser(payload).unwrap();
+      await registerUser(userData).unwrap();
+
+      if (formData.profileImage) {
+        await uploadAvatar(formData.profileImage).unwrap();
+      }
+
       setShowSubmitModal(false);
       dispatch(submitProfile());
     } catch (error) {
@@ -233,19 +232,20 @@ export default function ProfileOnboarding() {
     }
   };
 
+  // Comprehensive validation per step
   const isStepValid = () => {
     switch (step) {
       case 1:
-        return (
+        return !!(
           formData.first_name.trim() &&
           formData.middle_name.trim() &&
           formData.last_name.trim() &&
           formData.gender &&
           formData.birth_date &&
-          formData.email.trim()
+          isValidEmail(formData.email.trim())
         );
       case 2:
-        return (
+        return !!(
           formData.house_no.trim() &&
           formData.building_name.trim() &&
           formData.area_street.trim() &&
@@ -253,17 +253,23 @@ export default function ProfileOnboarding() {
           formData.city.trim() &&
           formData.district.trim() &&
           formData.state.trim() &&
-          formData.pincode.trim()
+          isExact6Digits(formData.pincode)
         );
       case 3:
-        return (
+        const isFromValid = isExact4Digits(formData.from_year);
+        const isToValid = isExact4Digits(formData.to_year);
+        const isDateRangeValid =
+          isFromValid &&
+          isToValid &&
+          parseInt(formData.to_year) >= parseInt(formData.from_year);
+
+        return !!(
           formData.samiti_hostel_name.trim() &&
           formData.duration_of_stay.trim() &&
-          formData.from_year.trim() &&
-          formData.to_year.trim()
+          isDateRangeValid
         );
       case 4:
-        return (
+        return !!(
           formData.profession.trim() &&
           formData.designation.trim() &&
           formData.company_name.trim()
@@ -348,7 +354,6 @@ export default function ProfileOnboarding() {
                   </TouchableOpacity>
                 </View>
 
-                {/* Rest of Step 1 Inputs... */}
                 <View className="flex-row gap-4">
                   <View className="flex-1">
                     <Text className="text-xs text-gray-500 mb-1">
@@ -443,7 +448,7 @@ export default function ProfileOnboarding() {
                     <Text className="text-xs text-gray-500 mb-1">Email *</Text>
                     <TextInput
                       placeholderTextColor="#9CA3AF"
-                      className="bg-gray-50 p-4 rounded-xl border border-gray-200 text-[#1C1C1C]"
+                      className={`bg-gray-50 p-4 rounded-xl border ${formData.email.length > 0 && !isValidEmail(formData.email) ? 'border-red-400' : 'border-gray-200'} text-[#1C1C1C]`}
                       placeholder="user@mail.com"
                       keyboardType="email-address"
                       autoCapitalize="none"
@@ -553,12 +558,16 @@ export default function ProfileOnboarding() {
                       Pincode *
                     </Text>
                     <TextInput
+                      maxLength={6}
                       placeholderTextColor="#9CA3AF"
                       className="bg-gray-50 p-4 rounded-xl border border-gray-200 text-[#1C1C1C]"
                       placeholder="411004"
                       keyboardType="numeric"
                       value={formData.pincode}
-                      onChangeText={t => updateField('pincode', t)}
+                      // Replaces any non-numeric characters ensuring only numbers are typed
+                      onChangeText={t =>
+                        updateField('pincode', t.replace(/[^0-9]/g, ''))
+                      }
                     />
                   </View>
                 </View>
@@ -601,12 +610,15 @@ export default function ProfileOnboarding() {
                       From (Year) *
                     </Text>
                     <TextInput
+                      maxLength={4}
                       placeholderTextColor="#9CA3AF"
                       className="bg-gray-50 p-4 rounded-xl border border-gray-200 text-[#1C1C1C]"
                       placeholder="2018"
                       keyboardType="numeric"
                       value={formData.from_year}
-                      onChangeText={t => updateField('from_year', t)}
+                      onChangeText={t =>
+                        updateField('from_year', t.replace(/[^0-9]/g, ''))
+                      }
                     />
                   </View>
                   <View className="flex-1">
@@ -614,12 +626,15 @@ export default function ProfileOnboarding() {
                       To (Year) *
                     </Text>
                     <TextInput
+                      maxLength={4}
                       placeholderTextColor="#9CA3AF"
                       className="bg-gray-50 p-4 rounded-xl border border-gray-200 text-[#1C1C1C]"
                       placeholder="2022"
                       keyboardType="numeric"
                       value={formData.to_year}
-                      onChangeText={t => updateField('to_year', t)}
+                      onChangeText={t =>
+                        updateField('to_year', t.replace(/[^0-9]/g, ''))
+                      }
                     />
                   </View>
                 </View>
@@ -675,8 +690,8 @@ export default function ProfileOnboarding() {
                       Terms & Conditions
                     </Text>
                     <Text className="text-[#2E4A8A] text-xs leading-5">
-                      Alumni is bound by rules and regulations of Vidhyarth
-                      Sahyak Samathi. By submitting, you agree to these terms.
+                      Alumni is bound by rules and regulations of Vidhyarthi
+                      Sahayak Samiti. By submitting, you agree to these terms.
                     </Text>
                   </View>
                 </View>
@@ -816,7 +831,6 @@ export default function ProfileOnboarding() {
               </View>
             </TouchableOpacity>
 
-            {/* 6. NEW conditional render for "Remove Photo" option */}
             {formData.profileImage && (
               <TouchableOpacity
                 onPress={handleRemovePhoto}

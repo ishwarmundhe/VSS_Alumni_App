@@ -35,6 +35,7 @@ import AdminDashboard from '../screens/admin/AdminDashboard';
 import SettingsScreen from '../screens/user/SettingScreen';
 import EventsScreen from '../screens/events/EventsScreen';
 import EventDetailsScreen from '../screens/events/EventDetailsScreen';
+import EventsCalendarScreen from '../screens/events/EventsCalendarScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -180,6 +181,7 @@ export default function RootStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="MainTabs" component={MainTabs} />
       <Stack.Screen name="Events" component={EventsScreen} />
+      <Stack.Screen name="EventsCalendar" component={EventsCalendarScreen} />
       <Stack.Screen name="EventDetails" component={EventDetailsScreen} />
 
       <Stack.Screen name="UserProfile" component={UserProfile} />

@@ -2,13 +2,12 @@ import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   TouchableOpacity,
   StatusBar,
   ActivityIndicator,
-  RefreshControl,
   FlatList,
   TextInput,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -17,213 +16,198 @@ import {
   MapPin,
   Clock,
   Users,
-  DollarSign,
   ChevronRight,
   Search,
+  CalendarDays,
+  List,
 } from 'lucide-react-native';
-import Toast from 'react-native-toast-message';
 
 import { useGetEventsQuery } from '../../api/apiSlice';
 
-export default function EventsScreen({ navigation }) {
-  const [viewMode, setViewMode] = useState('list');
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [searchQuery, setSearchQuery] = useState('');
+const BRAND = '#2563EB';
 
-  const { data: events = [], isFetching, refetch } = useGetEventsQuery();
-
-  const filteredEvents = useMemo(() => {
-    return events.filter(event => {
-      const matchesSearch = event.event_name
-        ?.toLowerCase()
-        .includes(searchQuery.toLowerCase());
-      return matchesSearch;
-    });
-  }, [events, searchQuery]);
-
-  const sortedEvents = useMemo(() => {
-    return [...filteredEvents].sort((a, b) => {
-      const dateA = new Date(`${a.date}T${a.time}`);
-      const dateB = new Date(`${b.date}T${b.time}`);
-      return dateA - dateB;
-    });
-  }, [filteredEvents]);
-
-  const upcomingEvents = useMemo(() => {
-    const now = new Date();
-    return sortedEvents.filter(event => {
-      const eventDate = new Date(`${event.date}T${event.time}`);
-      return eventDate >= now;
-    });
-  }, [sortedEvents]);
-
-  const handleEventPress = eventId => {
-    navigation.navigate('EventDetails', { eventId });
-  };
-
-  const renderEventCard = ({ item: event }) => (
-    <TouchableOpacity
-      onPress={() => handleEventPress(event.id)}
-      className="bg-white rounded-lg p-4 mb-4 shadow-sm border border-gray-200"
-    >
-      <View className="flex-row justify-between items-start mb-3">
-        <View className="flex-1">
-          <Text className="text-lg font-bold text-gray-900 mb-1">
-            {event.event_name}
-          </Text>
-          <View className="flex-row items-center gap-2">
-            <MapPin size={16} color="#666" />
-            <Text className="text-sm text-gray-600">
+const EventCard = ({ event, onPress }) => (
+  <TouchableOpacity
+    onPress={onPress}
+    className="bg-white rounded-xl p-4 mb-3 border border-gray-100 shadow-sm"
+    activeOpacity={0.75}
+  >
+    <View className="flex-row justify-between items-start mb-2">
+      <View className="flex-1 pr-2">
+        <Text
+          className="text-base font-bold text-gray-900 mb-1"
+          numberOfLines={2}
+        >
+          {event.event_name}
+        </Text>
+        {event.event_location ? (
+          <View className="flex-row items-center gap-1">
+            <MapPin size={13} color="#9CA3AF" />
+            <Text className="text-xs text-gray-500 flex-1" numberOfLines={1}>
               {event.event_location}
             </Text>
           </View>
-        </View>
-        <ChevronRight size={20} color="#999" />
+        ) : null}
       </View>
+      <ChevronRight size={18} color="#D1D5DB" />
+    </View>
 
-      <View className="flex-row justify-between mb-3">
-        <View className="flex-row items-center gap-2">
-          <Calendar size={16} color="#2563EB" />
-          <Text className="text-sm text-gray-700">{event.date}</Text>
+    <View className="flex-row items-center justify-between border-t border-gray-50 pt-2 mt-1">
+      <View className="flex-row items-center gap-3">
+        <View className="flex-row items-center gap-1">
+          <Calendar size={13} color={BRAND} />
+          <Text className="text-xs text-gray-600">{event.date}</Text>
         </View>
-        <View className="flex-row items-center gap-2">
-          <Clock size={16} color="#2563EB" />
-          <Text className="text-sm text-gray-700">{event.time}</Text>
+        <View className="flex-row items-center gap-1">
+          <Clock size={13} color={BRAND} />
+          <Text className="text-xs text-gray-600">{event.time}</Text>
         </View>
       </View>
+      {event.is_paid ? (
+        <View className="flex-row items-center gap-1 bg-green-50 px-2 py-1 rounded-full border border-green-100">
+          <Text className="text-xs font-bold text-green-700">
+            ₹{event.registration_fee}
+          </Text>
+        </View>
+      ) : (
+        <View className="bg-blue-50 px-2 py-1 rounded-full border border-blue-100">
+          <Text className="text-xs font-bold text-blue-600">Free</Text>
+        </View>
+      )}
+    </View>
 
-      <View className="flex-row justify-between items-center border-t border-gray-100 pt-3">
-        <View className="flex-row items-center gap-2">
-          <Users size={14} color="#666" />
-          <Text className="text-xs text-gray-600">By {event.host_name}</Text>
-        </View>
-        {event.is_paid && (
-          <View className="flex-row items-center gap-1 bg-green-100 px-2 py-1 rounded">
-            <DollarSign size={12} color="#16a34a" />
-            <Text className="text-xs font-semibold text-green-700">
-              ₹{event.registration_fee}
-            </Text>
-          </View>
-        )}
+    {event.host_name ? (
+      <View className="flex-row items-center gap-1 mt-2">
+        <Users size={12} color="#9CA3AF" />
+        <Text className="text-xs text-gray-400">By {event.host_name}</Text>
       </View>
-    </TouchableOpacity>
-  );
+    ) : null}
+  </TouchableOpacity>
+);
+
+export default function EventsScreen({ navigation }) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const { data: events = [], isFetching, refetch } = useGetEventsQuery();
+
+  const upcomingEvents = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    return events
+      .filter(e => {
+        const [y, m, d] = e.date.split('-');
+        const isUpcoming = new Date(Number(y), Number(m) - 1, Number(d)) >= now;
+
+        if (!isUpcoming) return false;
+        if (!q) return true;
+
+        return (
+          e.event_name?.toLowerCase().includes(q) ||
+          e.event_location?.toLowerCase().includes(q) ||
+          e.host_name?.toLowerCase().includes(q)
+        );
+      })
+      .sort(
+        (a, b) =>
+          new Date(`${a.date}T${a.time || '00:00'}`) -
+          new Date(`${b.date}T${b.time || '00:00'}`),
+      );
+  }, [events, searchQuery]);
 
   return (
-    <View className="flex-1 bg-white">
+    <View className="flex-1 bg-[#F8F9FA]">
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-      <SafeAreaView edges={['top']} className="flex-0 bg-white" />
+      <SafeAreaView edges={['top']} className="bg-white" />
 
       {/* Header */}
-      <View className="px-4 py-4 border-b border-gray-200">
+      <View className="bg-white px-4 pt-3 pb-4 border-b border-gray-100">
         <View className="flex-row items-center justify-between mb-4">
           <View className="flex-row items-center gap-3">
-            <TouchableOpacity onPress={() => navigation.goBack()}>
-              <ArrowLeft size={24} color="#000" />
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              className="p-1 -ml-1"
+            >
+              <ArrowLeft size={24} color="#111" />
             </TouchableOpacity>
             <Text className="text-2xl font-bold text-gray-900">Events</Text>
           </View>
+
+          {/* Navigates to the isolated Calendar Screen */}
+          <View className="flex-row bg-gray-100 rounded-xl p-1 gap-1">
+            <View className="px-3 py-1.5 rounded-lg flex-row items-center gap-1.5 bg-white shadow-sm">
+              <List size={15} color={BRAND} />
+              <Text className="text-xs font-semibold text-blue-600">List</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('EventsCalendar')}
+              className="px-3 py-1.5 rounded-lg flex-row items-center gap-1.5"
+            >
+              <CalendarDays size={15} color="#9CA3AF" />
+              <Text className="text-xs font-semibold text-gray-400">
+                Calendar
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* View Mode Toggle */}
-        <View className="flex-row gap-2">
-          <TouchableOpacity
-            onPress={() => setViewMode('list')}
-            className={`flex-1 py-2 rounded-lg ${
-              viewMode === 'list'
-                ? 'bg-blue-500'
-                : 'bg-gray-100 border border-gray-300'
-            }`}
-          >
-            <Text
-              className={`text-center font-semibold ${
-                viewMode === 'list' ? 'text-white' : 'text-gray-700'
-              }`}
-            >
-              List
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setViewMode('calendar')}
-            className={`flex-1 py-2 rounded-lg ${
-              viewMode === 'calendar'
-                ? 'bg-blue-500'
-                : 'bg-gray-100 border border-gray-300'
-            }`}
-          >
-            <Text
-              className={`text-center font-semibold ${
-                viewMode === 'calendar' ? 'text-white' : 'text-gray-700'
-              }`}
-            >
-              Calendar
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Search Bar */}
-      <View className="px-4 py-3 border-b border-gray-100">
-        <View className="flex-row items-center bg-gray-100 rounded-lg px-3">
-          <Search size={18} color="#999" />
+        <View className="flex-row items-center bg-gray-100 rounded-xl px-3 gap-2">
+          <Search size={16} color="#9CA3AF" />
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Search events..."
-            placeholderTextColor="#999"
-            className="flex-1 ml-2 py-2 text-gray-900"
+            placeholderTextColor="#9CA3AF"
+            className="flex-1 py-2.5 text-sm text-gray-900"
           />
         </View>
       </View>
 
-      {/* Content */}
       {isFetching ? (
         <View className="flex-1 justify-center items-center">
-          <ActivityIndicator size="large" color="#2563EB" />
+          <ActivityIndicator size="large" color={BRAND} />
         </View>
       ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
+        <FlatList
+          data={upcomingEvents}
+          keyExtractor={item => item.id?.toString()}
+          renderItem={({ item }) => (
+            <EventCard
+              event={item}
+              onPress={() =>
+                navigation.navigate('EventDetails', { eventId: item.id })
+              }
+            />
+          )}
           refreshControl={
             <RefreshControl refreshing={isFetching} onRefresh={refetch} />
           }
-          className="flex-1 px-4 py-4"
-        >
-          {viewMode === 'list' ? (
-            <>
-              {upcomingEvents.length > 0 ? (
-                <>
-                  <Text className="text-sm font-semibold text-gray-600 mb-3">
-                    UPCOMING ({upcomingEvents.length})
-                  </Text>
-                  <FlatList
-                    scrollEnabled={false}
-                    data={upcomingEvents}
-                    renderItem={renderEventCard}
-                    keyExtractor={item => item.id?.toString()}
-                  />
-                </>
-              ) : (
-                <View className="py-12 items-center">
-                  <Calendar size={48} color="#999" />
-                  <Text className="text-gray-600 mt-4 text-center">
-                    No upcoming events
-                  </Text>
-                </View>
-              )}
-            </>
-          ) : (
-            <View className="py-8 items-center">
-              <Calendar size={48} color="#2563EB" />
-              <Text className="text-gray-700 mt-4 font-semibold">
-                Calendar View
+          contentContainerStyle={{
+            paddingHorizontal: 16,
+            paddingTop: 16,
+            paddingBottom: 40,
+            flexGrow: 1,
+          }}
+          ListHeaderComponent={
+            upcomingEvents.length > 0 ? (
+              <Text className="text-xs font-bold text-gray-400 tracking-widest mb-3 uppercase">
+                Upcoming · {upcomingEvents.length}
               </Text>
-              <Text className="text-gray-500 text-sm mt-2 text-center">
-                Calendar view coming soon
+            ) : null
+          }
+          ListEmptyComponent={
+            <View className="flex-1 justify-center items-center py-20">
+              <CalendarDays size={48} color="#D1D5DB" />
+              <Text className="text-gray-400 mt-4 font-semibold">
+                No upcoming events
+              </Text>
+              <Text className="text-gray-300 text-sm mt-1">
+                Check back later
               </Text>
             </View>
-          )}
-        </ScrollView>
+          }
+          showsVerticalScrollIndicator={false}
+        />
       )}
     </View>
   );
